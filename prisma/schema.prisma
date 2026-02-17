@@ -1,0 +1,34 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Member {
+  id        Int      @id @default(autoincrement())
+  name      String
+  birth     String
+  phone     String
+  address   String
+  level     String
+  note      String
+  fees      Fee[]
+  createdAt DateTime @default(now())
+  deleted   Boolean  @default(false)
+}
+
+model Fee {
+  id        Int     @id @default(autoincrement())
+  memberId  Int
+  year      Int
+  month     Int
+  paid      Boolean @default(false)
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([memberId, year, month])
+}
