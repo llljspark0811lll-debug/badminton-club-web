@@ -51,22 +51,59 @@ export default function MainPage() {
   // ✅ 등록 / 수정
   const handleSubmit = async () => {
     if (editingMember) {
-      await fetch("/api/members", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: editingMember.id,
-          ...form,
-        }),
-      });
+      // ✅ 낙관적 업데이트용: 기존 상태 백업
+      const prevMembers = members;
+
+      // 1) 화면 먼저 업데이트
+      const updatedMember: Member = {
+        ...editingMember,
+        ...form,
+      };
+
+      setMembers((prev) =>
+        prev.map((m) => (m.id === editingMember.id ? updatedMember : m))
+      );
+
+      // 2) 서버 요청
+      try {
+        const res = await fetch("/api/members", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: editingMember.id,
+            ...form,
+          }),
+        });
+
+        if (!res.ok) {
+          // 실패 시 롤백
+          setMembers(prevMembers);
+          alert("회원 수정에 실패했습니다. 다시 시도해주세요.");
+        }
+        // 성공이면 굳이 fetchMembers() 안 해도 됨
+        // (서버에서 다른 필드를 바꾸는 로직이 있으면 그때만 fetchMembers() 호출)
+      } catch (e) {
+        setMembers(prevMembers);
+        alert("네트워크 오류가 발생했습니다. 다시 시도해주세요.");
+      }
     } else {
-      await fetch("/api/members", {
+      // ✅ 등록은 기존처럼 서버 기준으로
+      const res = await fetch("/api/members", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
+
+      if (!res.ok) {
+        alert("회원 등록에 실패했습니다. 다시 시도해주세요.");
+        return;
+      }
+
+      // 등록은 id가 새로 생기니까 서버 데이터로 동기화
+      fetchMembers();
     }
 
+    // 모달/폼 리셋은 공통
     setShowModal(false);
     setEditingMember(null);
     setForm({
@@ -77,8 +114,6 @@ export default function MainPage() {
       level: "",
       note: "",
     });
-
-    fetchMembers();
   };
 
   // ✅ Soft Delete
@@ -126,21 +161,21 @@ export default function MainPage() {
   };
 
   // ✅ 회비 상태 토글 함수
-const toggleFee = async (
-  memberId: number,
-  year: number,
-  month: number,
-  currentPaid: boolean
-) => {
-  // 1. 기존 상태 백업
-  const prevMembers = members;
+  const toggleFee = async (
+    memberId: number,
+    year: number,
+    month: number,
+    currentPaid: boolean
+  ) => {
+    // 1. 기존 상태 백업
+    const prevMembers = members;
 
-  // 2. UI를 먼저 토글 (낙관적 업데이트)
-  setMembers((prev) =>
-    prev.map((m) =>
-      m.id !== memberId
-        ? m
-        : {
+    // 2. UI를 먼저 토글 (낙관적 업데이트)
+    setMembers((prev) =>
+      prev.map((m) =>
+        m.id !== memberId
+          ? m
+          : {
             ...m,
             fees: (() => {
               const exists = m.fees.find(
@@ -166,36 +201,36 @@ const toggleFee = async (
               }
             })(),
           }
-    )
-  );
+      )
+    );
 
-  try {
-    // 3. 서버 요청
-    const res = await fetch("/api/fees", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        memberId,
-        year,
-        month,
-        paid: !currentPaid,
-      }),
-    });
+    try {
+      // 3. 서버 요청
+      const res = await fetch("/api/fees", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          memberId,
+          year,
+          month,
+          paid: !currentPaid,
+        }),
+      });
 
-    if (!res.ok) {
-      // 4. 실패 시 롤백
+      if (!res.ok) {
+        // 4. 실패 시 롤백
+        setMembers(prevMembers);
+        alert("회비 상태 변경에 실패했습니다. 다시 시도해주세요.");
+      } else {
+        // 선택사항: 서버 기준으로 다시 동기화 (느리면 생략 가능)
+        // await fetchMembers();
+      }
+    } catch (e) {
+      // 네트워크 에러 등
       setMembers(prevMembers);
-      alert("회비 상태 변경에 실패했습니다. 다시 시도해주세요.");
-    } else {
-      // 선택사항: 서버 기준으로 다시 동기화 (느리면 생략 가능)
-      // await fetchMembers();
+      alert("네트워크 오류가 발생했습니다. 다시 시도해주세요.");
     }
-  } catch (e) {
-    // 네트워크 에러 등
-    setMembers(prevMembers);
-    alert("네트워크 오류가 발생했습니다. 다시 시도해주세요.");
-  }
-};
+  };
 
   // ✅ 현재 연도 상태 (기본값은 올해)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
