@@ -1,23 +1,54 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";  // ← useEffect 추가
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");  // email → username 변경
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const router = useRouter();
 
-  const handleLogin = () => {
-    if (!email || !password) {
-      setError("이메일과 비밀번호를 입력하세요.");
+  // ✅ 첫 접속시 이전 아이디 자동 입력 (아이디 잊어버림 방지)
+  useEffect(() => {
+    const savedUsername = localStorage.getItem("lastLoginUsername");
+    if (savedUsername) {
+      setUsername(savedUsername);
+    }
+  }, []);
+
+  const handleLogin = async () => {
+    if (!username || !password) {
+      setError("아이디와 비밀번호를 입력하세요.");
       return;
     }
 
-    setError("");
-    alert("로그인 성공 (임시)");
-    router.push("/main"); // 나중에 메인으로 이동
+    try {
+      setError("");
+
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        setError(data?.message || "로그인에 실패했습니다.");
+        return;
+      }
+
+      const data = await res.json();
+
+      // 테스트용: 브라우저에 관리자 정보 저장
+      localStorage.setItem("adminUsername", data.username);
+      localStorage.setItem("adminId", String(data.id));
+      localStorage.setItem("lastLoginUsername", data.username);
+
+      router.push("/main");
+    } catch (e) {
+      setError("네트워크 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+    }
   };
 
   return (
@@ -29,11 +60,11 @@ export default function LoginPage() {
         </h1>
 
         <input
-          type="email"
-          placeholder="이메일"
+          type="text"  // email → text 변경 (test01 형식)
+          placeholder="아이디 (예: test01)"
           className="w-full border p-2 rounded mb-3 text-gray-900 placeholder:text-gray-500"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
         />
 
         <input

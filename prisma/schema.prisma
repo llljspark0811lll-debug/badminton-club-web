@@ -8,6 +8,15 @@ generator client {
   provider = "prisma-client-js"
 }
 
+model Admin {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique // 예: "test01"
+  password  String // 일단 평문 또는 해시 (추천: 해시)
+  createdAt DateTime @default(now())
+
+  members Member[] // 이 관리자가 관리하는 회원들
+}
+
 model Member {
   id        Int      @id @default(autoincrement())
   name      String
@@ -19,14 +28,16 @@ model Member {
   fees      Fee[]
   createdAt DateTime @default(now())
   deleted   Boolean  @default(false)
+  admin     Admin?   @relation(fields: [adminId], references: [id])
+  adminId   Int?
 }
 
 model Fee {
-  id        Int     @id @default(autoincrement())
-  memberId  Int
-  year      Int
-  month     Int
-  paid      Boolean @default(false)
+  id       Int     @id @default(autoincrement())
+  memberId Int
+  year     Int
+  month    Int
+  paid     Boolean @default(false)
 
   member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
 

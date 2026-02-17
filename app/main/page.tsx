@@ -39,7 +39,13 @@ export default function MainPage() {
 
   // ✅ DB에서 회원 불러오기
   const fetchMembers = async () => {
-    const res = await fetch("/api/members");
+    const adminId = localStorage.getItem("adminId");
+
+    const res = await fetch("/api/members", {
+      headers: {
+        "x-admin-id": adminId || "1",  // 추가!
+      },
+    });
     const data = await res.json();
     setMembers(data);
   };
@@ -68,11 +74,11 @@ export default function MainPage() {
       try {
         const res = await fetch("/api/members", {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id: editingMember.id,
-            ...form,
-          }),
+          headers: {
+            "Content-Type": "application/json",
+            "x-admin-id": localStorage.getItem("adminId") || "1"  // 추가!
+          },
+          // ...
         });
 
         if (!res.ok) {
@@ -90,7 +96,10 @@ export default function MainPage() {
       // ✅ 등록은 기존처럼 서버 기준으로
       const res = await fetch("/api/members", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-id": localStorage.getItem("adminId") || "1"
+        },
         body: JSON.stringify(form),
       });
 
@@ -120,13 +129,16 @@ export default function MainPage() {
   const handleDelete = async (id: number) => {
     if (!confirm("정말 삭제하시겠습니까?")) return;
 
-    await fetch("/api/members", {
+    const res = await fetch("/api/members", { // 엔드포인트 확인 필요 (보통 삭제는 /api/members)
       method: "DELETE",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-id": localStorage.getItem("adminId") || "1"
+      },
       body: JSON.stringify({ id }),
     });
 
-    fetchMembers();
+    if (res.ok) fetchMembers();
   };
 
   // ✅ 영구 삭제
@@ -151,7 +163,10 @@ export default function MainPage() {
   const handleRestore = async (id: number) => {
     const res = await fetch("/api/members", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-id": localStorage.getItem("adminId") || "1"
+      },
       body: JSON.stringify({ id }),
     });
 
@@ -208,7 +223,10 @@ export default function MainPage() {
       // 3. 서버 요청
       const res = await fetch("/api/fees", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-id": localStorage.getItem("adminId") || "1"
+        },
         body: JSON.stringify({
           memberId,
           year,
@@ -314,19 +332,19 @@ export default function MainPage() {
         )}
 
         {activeTab === "fees" && (
-  <div>
-    <div className="mb-4 p-3 bg-gray-50 rounded-lg flex justify-between items-center">
-      <div className="flex gap-4 text-sm font-bold items-center">
-        <span>현황:</span>
-        <span className="text-black">● 미납</span>
-        <span className="text-red-500">● 완납</span>
-        
-        {/* ✅ 연도 선택 드롭다운 */}
-        <select 
-          className="ml-4 p-1 border rounded"
-          value={selectedYear}
-          onChange={(e) => setSelectedYear(Number(e.target.value))}
-        >
+          <div>
+            <div className="mb-4 p-3 bg-gray-50 rounded-lg flex justify-between items-center">
+              <div className="flex gap-4 text-sm font-bold items-center">
+                <span>현황:</span>
+                <span className="text-black">● 미납</span>
+                <span className="text-red-500">● 완납</span>
+
+                {/* ✅ 연도 선택 드롭다운 */}
+                <select
+                  className="ml-4 p-1 border rounded"
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(Number(e.target.value))}
+                >
                   {/* 가입년도부터 내년까지 자동 생성 (예시로 2024~2027) */}
                   {[2024, 2025, 2026, 2027].map(y => (
                     <option key={y} value={y}>{y}년</option>
@@ -384,11 +402,10 @@ export default function MainPage() {
               ).map((m) => (
                 <tr
                   key={m.id}
-                  className={`text-center ${
-                    m.deleted
-                      ? "line-through text-gray-400 bg-gray-100"
-                      : ""
-                  }`}
+                  className={`text-center ${m.deleted
+                    ? "line-through text-gray-400 bg-gray-100"
+                    : ""
+                    }`}
                 >
                   <td className="p-2 border">{m.name}</td>
                   <td className="p-2 border">{m.phone}</td>

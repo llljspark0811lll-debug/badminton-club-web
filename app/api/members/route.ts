@@ -1,32 +1,42 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
-// ✅ GET: 회원 목록과 회비 정보를 함께 가져오기
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    // localStorage에서 adminId 가져오기 (클라이언트에서 헤더로 보내야 함)
+    // 임시: 요청에서 username 파싱 (나중에 개선)
+    const adminIdStr = req.headers.get("x-admin-id");
+    const adminId = adminIdStr ? Number(adminIdStr) : 1; // 기본값 test01
+
     const members = await prisma.member.findMany({
+      where: { 
+        adminId: adminId // 로그인한 관리자의 회원만
+      },
       include: {
-        fees: true, // 회비 정보 포함
+        fees: true,
       },
       orderBy: { id: "desc" },
     });
     
-    // 데이터가 잘 찾아졌다면 응답 보냄
     return NextResponse.json(members);
   } catch (error) {
     console.error("데이터 불러오기 에러:", error);
-    // 에러가 발생하면 빈 배열이라도 보내서 클라이언트가 멈추지 않게 함
     return NextResponse.json([], { status: 500 });
   }
 }
 
-// ✅ POST: 회원 등록
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    const adminIdStr = req.headers.get("x-admin-id");
+    const adminId = adminIdStr ? Number(adminIdStr) : 1;
+
     const newMember = await prisma.member.create({
-      data: body,
-      include: { fees: true } // 등록 후 즉시 정보를 넘겨줄 때도 형식을 맞춤
+      data: {
+        ...body,
+        adminId,
+      },
+      include: { fees: true }
     });
     return NextResponse.json(newMember);
   } catch (error) {
@@ -35,7 +45,6 @@ export async function POST(req: Request) {
   }
 }
 
-// PUT
 export async function PUT(req: Request) {
   const body = await req.json();
 
@@ -47,7 +56,6 @@ export async function PUT(req: Request) {
   return NextResponse.json(updated);
 }
 
-// DELETE
 export async function DELETE(req: Request) {
   const body = await req.json();
 
@@ -59,7 +67,6 @@ export async function DELETE(req: Request) {
   return NextResponse.json({ success: true });
 }
 
-// PATCH
 export async function PATCH(req: Request) {
   try {
     const { id } = await req.json();

@@ -13,7 +13,6 @@ export default function Home() {
         </h1>
 
         <p className="text-gray-600 mb-6">
-          고생하는 우리 클럽 총무님을 위한 <br/>
           회비 관리 · 재정 · 출석 관리 시스템
         </p>
 
