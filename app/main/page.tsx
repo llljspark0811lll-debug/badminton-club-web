@@ -249,40 +249,22 @@ export default function MainPage() {
             <div className="overflow-x-auto border rounded-lg">
               <table className="w-full text-sm">
                 <thead className="bg-gray-200">
-                  <tr>
-                    <th className="p-3 border sticky left-0 bg-gray-200 z-10">이름</th>
-                    {Array.from({ length: 12 }, (_, i) => (
-                      <th key={i + 1} className="p-3 border">{i + 1}월</th>
-                    ))}
-                    <th className="p-3 border">비고</th> {/* 완납 버튼용 칸 */}
-                  </tr>
+                  <tr><th className="p-3 border sticky left-0 bg-gray-200 z-10">이름</th>{Array.from({ length: 12 }, (_, i) => (<th key={i + 1} className="p-3 border">{i + 1}월</th>))}<th className="p-3 border">비고</th></tr>
                 </thead>
                 <tbody>
                   {activeMembers.map((m) => (
                     <tr key={m.id} className="text-center hover:bg-gray-50">
-                      <td className="p-3 border font-bold sticky left-0 bg-white z-10">{m.name}</td>
-                      {Array.from({ length: 12 }, (_, i) => {
+                      <td className="p-3 border font-bold sticky left-0 bg-white z-10">{m.name}</td>{Array.from({ length: 12 }, (_, i) => {
                         const month = i + 1;
                         const feeRecord = m.fees?.find(f => f.year === selectedYear && f.month === month);
                         const isPaid = feeRecord ? feeRecord.paid : false;
-
                         return (
-                          <td
-                            key={month}
-                            className="p-3 border cursor-pointer"
-                            onClick={() => toggleFee(m.id, selectedYear, month, isPaid)}
-                          >
+                          <td key={month} className="p-3 border cursor-pointer" onClick={() => toggleFee(m.id, selectedYear, month, isPaid)}>
                             <span className={`text-xl ${isPaid ? "text-red-500" : "text-black opacity-10"}`}>●</span>
                           </td>
                         );
-                      })}
-                      <td className="p-2 border">
-                        <button
-                          onClick={() => handleAllPaid(m.id)}
-                          className="bg-red-100 text-red-600 px-2 py-1 rounded text-xs font-bold hover:bg-red-200"
-                        >
-                          완납
-                        </button>
+                      })}<td className="p-2 border">
+                        <button onClick={() => handleAllPaid(m.id)} className="bg-red-100 text-red-600 px-2 py-1 rounded text-xs font-bold hover:bg-red-200">완납</button>
                       </td>
                     </tr>
                   ))}
