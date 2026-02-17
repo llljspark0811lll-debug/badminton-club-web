@@ -126,7 +126,51 @@ export default function MainPage() {
   };
 
   // ✅ 회비 상태 토글 함수
-  const toggleFee = async (memberId: number, year: number, month: number, currentPaid: boolean) => {
+const toggleFee = async (
+  memberId: number,
+  year: number,
+  month: number,
+  currentPaid: boolean
+) => {
+  // 1. 기존 상태 백업
+  const prevMembers = members;
+
+  // 2. UI를 먼저 토글 (낙관적 업데이트)
+  setMembers((prev) =>
+    prev.map((m) =>
+      m.id !== memberId
+        ? m
+        : {
+            ...m,
+            fees: (() => {
+              const exists = m.fees.find(
+                (f) => f.year === year && f.month === month
+              );
+              if (exists) {
+                // 기존 기록이 있으면 paid만 토글
+                return m.fees.map((f) =>
+                  f.year === year && f.month === month
+                    ? { ...f, paid: !currentPaid }
+                    : f
+                );
+              } else {
+                // 기록이 없으면 새로 추가
+                const newId =
+                  m.fees.length > 0
+                    ? Math.max(...m.fees.map((f) => f.id)) + 1
+                    : 1;
+                return [
+                  ...m.fees,
+                  { id: newId, year, month, paid: !currentPaid },
+                ];
+              }
+            })(),
+          }
+    )
+  );
+
+  try {
+    // 3. 서버 요청
     const res = await fetch("/api/fees", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -134,14 +178,24 @@ export default function MainPage() {
         memberId,
         year,
         month,
-        paid: !currentPaid, // 현재 상태의 반대로 보냄 (true -> false)
+        paid: !currentPaid,
       }),
     });
 
-    if (res.ok) {
-      fetchMembers(); // 화면 새로고침 대신 데이터를 다시 불러옵니다.
+    if (!res.ok) {
+      // 4. 실패 시 롤백
+      setMembers(prevMembers);
+      alert("회비 상태 변경에 실패했습니다. 다시 시도해주세요.");
+    } else {
+      // 선택사항: 서버 기준으로 다시 동기화 (느리면 생략 가능)
+      // await fetchMembers();
     }
-  };
+  } catch (e) {
+    // 네트워크 에러 등
+    setMembers(prevMembers);
+    alert("네트워크 오류가 발생했습니다. 다시 시도해주세요.");
+  }
+};
 
   // ✅ 현재 연도 상태 (기본값은 올해)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
