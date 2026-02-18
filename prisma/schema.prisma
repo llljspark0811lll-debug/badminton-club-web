@@ -10,26 +10,27 @@ generator client {
 
 model Admin {
   id        Int      @id @default(autoincrement())
-  username  String   @unique // 예: "test01"
-  password  String // 일단 평문 또는 해시 (추천: 해시)
+  username  String   @unique
+  password  String
   createdAt DateTime @default(now())
 
-  members Member[] // 이 관리자가 관리하는 회원들
+  members Member[]
 }
 
 model Member {
   id        Int      @id @default(autoincrement())
   name      String
+  gender    String
   birth     String
   phone     String
-  address   String
   level     String
   note      String
   fees      Fee[]
   createdAt DateTime @default(now())
   deleted   Boolean  @default(false)
-  admin     Admin?   @relation(fields: [adminId], references: [id])
-  adminId   Int?
+
+  adminId   Int
+  admin     Admin    @relation(fields: [adminId], references: [id])
 }
 
 model Fee {

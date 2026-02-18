@@ -1,23 +1,23 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
+/**
+ * ✅ 회원 목록 조회
+ */
 export async function GET(req: Request) {
   try {
-    // localStorage에서 adminId 가져오기 (클라이언트에서 헤더로 보내야 함)
-    // 임시: 요청에서 username 파싱 (나중에 개선)
     const adminIdStr = req.headers.get("x-admin-id");
-    const adminId = adminIdStr ? Number(adminIdStr) : 1; // 기본값 test01
+    const adminId = adminIdStr ? Number(adminIdStr) : 1;
 
     const members = await prisma.member.findMany({
       where: { 
-        adminId: adminId // 로그인한 관리자의 회원만
+        adminId,
+        deleted: false, // 👈 삭제된 회원 제외
       },
-      include: {
-        fees: true,
-      },
+      include: { fees: true },
       orderBy: { id: "desc" },
     });
-    
+
     return NextResponse.json(members);
   } catch (error) {
     console.error("데이터 불러오기 에러:", error);
@@ -25,6 +25,9 @@ export async function GET(req: Request) {
   }
 }
 
+/**
+ * ✅ 회원 등록
+ */
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -33,11 +36,17 @@ export async function POST(req: Request) {
 
     const newMember = await prisma.member.create({
       data: {
-        ...body,
+        name: body.name,
+        gender: body.gender, // 👈 추가
+        birth: body.birth,
+        phone: body.phone,
+        level: body.level,
+        note: body.note,
         adminId,
       },
-      include: { fees: true }
+      include: { fees: true },
     });
+
     return NextResponse.json(newMember);
   } catch (error) {
     console.error("등록 에러:", error);
@@ -45,28 +54,56 @@ export async function POST(req: Request) {
   }
 }
 
+/**
+ * ✅ 회원 수정
+ */
 export async function PUT(req: Request) {
-  const body = await req.json();
+  try {
+    const body = await req.json();
+    const { id, name, gender, birth, phone, level, note } = body;
 
-  const updated = await prisma.member.update({
-    where: { id: body.id },
-    data: body,
-  });
+    const updated = await prisma.member.update({
+      where: { id: Number(id) },
+      data: {
+        name: name ?? "",
+        gender: gender ?? "",
+        birth: birth ?? "",
+        phone: phone ?? "",
+        level: level ?? "",
+        note: note ?? "",
+      },
+      include: { fees: true },
+    });
 
-  return NextResponse.json(updated);
+    return NextResponse.json(updated);
+  } catch (error) {
+    console.error("🔥 수정 에러 상세:", error);
+    return NextResponse.json({ error: "수정 실패" }, { status: 500 });
+  }
 }
 
+/**
+ * ✅ 회원 삭제 (소프트 삭제)
+ */
 export async function DELETE(req: Request) {
-  const body = await req.json();
+  try {
+    const body = await req.json();
 
-  await prisma.member.update({
-    where: { id: body.id },
-    data: { deleted: true },
-  });
+    await prisma.member.update({
+      where: { id: Number(body.id) },
+      data: { deleted: true },
+    });
 
-  return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("삭제 에러:", error);
+    return NextResponse.json({ error: "삭제 실패" }, { status: 500 });
+  }
 }
 
+/**
+ * ✅ 회원 복구
+ */
 export async function PATCH(req: Request) {
   try {
     const { id } = await req.json();
@@ -78,7 +115,7 @@ export async function PATCH(req: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error(error);
+    console.error("복구 에러:", error);
     return NextResponse.json({ error: "복구 실패" }, { status: 500 });
   }
 }
