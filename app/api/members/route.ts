@@ -12,7 +12,6 @@ export async function GET(req: Request) {
     const members = await prisma.member.findMany({
       where: { 
         adminId,
-        deleted: false, // 👈 삭제된 회원 제외
       },
       include: { fees: true },
       orderBy: { id: "desc" },

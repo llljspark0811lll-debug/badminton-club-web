@@ -369,11 +369,16 @@ export default function MainPage() {
                       </span>
                     </td>
                     <td className="p-4 text-gray-500">
-                      {new Date(m.birth).toLocaleDateString("ko-KR")}
+                      {m.birth ? new Date(m.birth).toLocaleDateString("ko-KR") : ""}
                     </td>
                     <td className="p-4">{m.phone}</td>
                     <td className="p-4">
-                      <span className={`px-2 py-1 rounded text-xs font-bold ${m.deleted ? "bg-gray-200" : "bg-blue-100 text-blue-700"}`}>
+                      <span
+                        className={`px-2 py-1 rounded text-sm ${m.gender === "남"
+                            ? "bg-blue-100 text-blue-700"
+                            : "bg-pink-100 text-pink-700"
+                          }`}
+                      >
                         {m.level}
                       </span>
                     </td>
