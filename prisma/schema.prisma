@@ -9,20 +9,21 @@ generator client {
 }
 
 model Admin {
-  id        Int      @id @default(autoincrement())
-  username  String   @unique
+  id        Int       @id @default(autoincrement())
+  username  String    @unique
   password  String
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
-  members Member[]
+  members   Member[]
 }
 
 model Member {
   id        Int      @id @default(autoincrement())
   name      String
-  gender    String
+  gender    String 
   birth     String
   phone     String
+  carnumber String   @default("")
   level     String
   note      String
   fees      Fee[]
@@ -34,11 +35,11 @@ model Member {
 }
 
 model Fee {
-  id       Int     @id @default(autoincrement())
-  memberId Int
-  year     Int
-  month    Int
-  paid     Boolean @default(false)
+  id        Int     @id @default(autoincrement())
+  memberId  Int
+  year      Int
+  month     Int
+  paid      Boolean @default(false)
 
   member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
 

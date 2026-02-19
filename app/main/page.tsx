@@ -18,6 +18,7 @@ interface Member {
   level: string;
   createdAt: string;
   note: string;
+  carnumber: string;
   deleted?: boolean;
   fees: Fee[];
 }
@@ -35,6 +36,7 @@ export default function MainPage() {
     birth: "",
     phone: "",    
     level: "",
+    carnumber: "",
     note: "",
   });
 
@@ -102,12 +104,13 @@ export default function MainPage() {
           },
           body: JSON.stringify({
             id: editingMember.id,
-            adminId: parseInt(adminId), // 숫자로 확실히 변환
+            adminId: parseInt(adminId),
             name: form.name,
             gender: form.gender,
             birth: form.birth,
             phone: form.phone,
             level: form.level,
+            carnumber: form.carnumber,
             note: form.note,
           }),
         });
@@ -136,7 +139,7 @@ export default function MainPage() {
 
     setShowModal(false);
     setEditingMember(null);
-    setForm({ name: "", gender: "", birth: "", phone: "", level: "", note: "" });
+    setForm({ name: "", gender: "", birth: "", phone: "", level: "", carnumber: "", note: "" });
   };
 
   // ✅ Soft Delete
@@ -352,6 +355,7 @@ export default function MainPage() {
                   <th className="p-4">연락처</th>                  
                   <th className="p-4">급수</th>
                   <th className="p-4">등록일</th>
+                  <th className="p-4">차량번호</th>
                   <th className="p-4">비고</th>
                   <th className="p-4 text-center">관리</th>
                 </tr>
@@ -383,7 +387,8 @@ export default function MainPage() {
                       </span>
                     </td>
                     <td className="p-4 text-gray-500">{new Date(m.createdAt).toLocaleDateString()}</td>
-                    <td className="p-4 truncate max-w-[150px]">{m.note}</td>
+                    <td className="p-4 text-gray-500">{m.carnumber || "-"}</td>
+                    <td className="p-4 text-gray-500">{m.note}</td>
                     <td className="p-4 text-center space-x-2">
                       {!m.deleted ? (
                         <>
@@ -397,6 +402,7 @@ export default function MainPage() {
                                 birth: m.birth || "",
                                 phone: m.phone || "",                                
                                 level: m.level || "",
+                                carnumber: m.carnumber || "",
                                 note: m.note || "",
                               });
                               setShowModal(true);
@@ -465,6 +471,7 @@ export default function MainPage() {
                   { id: "birth", label: "생년월일", ph: "1990-01-01" },
                   { id: "phone", label: "연락처", ph: "010-0000-0000" },
                   { id: "level", label: "급수 (A, B, C, D, 초심)", ph: "A" },
+                  { id: "carnumber", label: "차량번호", ph: "차량번호" },
                   { id: "note", label: "비고", ph: "특이사항" },
                 ].map((input) => (
                   <div key={input.id}>
