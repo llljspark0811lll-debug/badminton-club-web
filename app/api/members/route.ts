@@ -36,10 +36,11 @@ export async function POST(req: Request) {
     const newMember = await prisma.member.create({
       data: {
         name: body.name,
-        gender: body.gender, // 👈 추가
+        gender: body.gender,
         birth: body.birth,
         phone: body.phone,
         level: body.level,
+        carnumber: body.carnumber,
         note: body.note,
         adminId,
       },
@@ -59,17 +60,20 @@ export async function POST(req: Request) {
 export async function PUT(req: Request) {
   try {
     const body = await req.json();
-    const { id, name, gender, birth, phone, level, note } = body;
+    console.log("서버가 받은 데이터:", body); // 👈 터미널에서 데이터가 실제로 들어오는지 확인용
+
+    const { id, name, gender, birth, phone, level, carnumber, note } = body;
 
     const updated = await prisma.member.update({
       where: { id: Number(id) },
       data: {
-        name: name ?? "",
-        gender: gender ?? "",
-        birth: birth ?? "",
-        phone: phone ?? "",
-        level: level ?? "",
-        note: note ?? "",
+        name: String(name || ""),
+        gender: String(gender || ""),
+        birth: String(birth || ""),
+        phone: String(phone || ""),
+        level: String(level || ""),
+        carnumber: String(carnumber || ""), // 👈 강제로 String으로 형변환해서 명시
+        note: String(note || ""),
       },
       include: { fees: true },
     });
