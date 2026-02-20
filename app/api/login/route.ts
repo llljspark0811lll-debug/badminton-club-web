@@ -5,9 +5,7 @@ export async function POST(req: NextRequest) {
   try {
     const { username, password } = await req.json();
 
-    const admin = await prisma.admin.findUnique({
-      where: { username },
-    });
+    const admin = await prisma.admin.findUnique({ where: { username } });
 
     if (!admin) {
       return NextResponse.json(
@@ -26,6 +24,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       id: admin.id,
       username: admin.username,
+      custom1Label: admin.custom1Label
     });
   } catch (error) {
     console.error("로그인 에러:", error);

@@ -28,6 +28,7 @@ model Admin {
 
   createdAt DateTime  @default(now())
 
+  custom1Label String @default("차량번호")
 
 
   members   Member[]

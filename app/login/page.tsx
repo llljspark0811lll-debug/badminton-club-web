@@ -1,15 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";  // ← useEffect 추가
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
-  const [username, setUsername] = useState("");  // email → username 변경
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const router = useRouter();
 
-  // ✅ 첫 접속시 이전 아이디 자동 입력 (아이디 잊어버림 방지)
+  // 첫 접속시 이전 아이디 자동 입력
   useEffect(() => {
     const savedUsername = localStorage.getItem("lastLoginUsername");
     if (savedUsername) {
@@ -40,10 +40,11 @@ export default function LoginPage() {
 
       const data = await res.json();
 
-      // 테스트용: 브라우저에 관리자 정보 저장
+      // 브라우저에 관리자 정보 저장
       localStorage.setItem("adminUsername", data.username);
       localStorage.setItem("adminId", String(data.id));
       localStorage.setItem("lastLoginUsername", data.username);
+      localStorage.setItem("custom1Label", data.custom1Label);
 
       router.push("/main");
     } catch (e) {
@@ -60,8 +61,8 @@ export default function LoginPage() {
         </h1>
 
         <input
-          type="text"  // email → text 변경 (test01 형식)
-          placeholder="아이디 (예: test01)"
+          type="text"
+          placeholder="아이디 (test01, test02)"
           className="w-full border p-2 rounded mb-3 text-gray-900 placeholder:text-gray-500"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
@@ -69,7 +70,7 @@ export default function LoginPage() {
 
         <input
           type="password"
-          placeholder="비밀번호"
+          placeholder="비밀번호 (1234)"
           className="w-full border p-2 rounded mb-3 text-gray-900 placeholder:text-gray-500"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
