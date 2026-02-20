@@ -23,11 +23,18 @@ interface Member {
   fees: Fee[];
 }
 
+// 관리자별 맞춤 설정
+const ADMIN_CONFIG: Record<string, { extraLabel: string }> = {
+  "79yangkees": { extraLabel: "소속클럽" },
+};
+
 export default function MainPage() {
   const [activeTab, setActiveTab] = useState("active");
   const [members, setMembers] = useState<Member[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
+  // 2. 로그인된 username 가져오기
+  const [extraFieldLabel, setExtraFieldLabel] = useState("차량번호");
 
   const [sortBy, setSortBy] = useState<"name" | "date" | "level" | "gender">("name");
   const [form, setForm] = useState({
@@ -53,6 +60,13 @@ export default function MainPage() {
   };
 
   useEffect(() => {
+    // 이미 LoginPage에서 "adminUsername"이라는 이름으로 저장하고 있음
+    const currentUsername = localStorage.getItem("adminUsername");
+    if (currentUsername && ADMIN_CONFIG[currentUsername]) {
+      setExtraFieldLabel(ADMIN_CONFIG[currentUsername].extraLabel);
+    } else {
+      setExtraFieldLabel("차량번호");
+    }
     fetchMembers();
   }, []);
 
@@ -355,7 +369,7 @@ export default function MainPage() {
                   <th className="p-4">연락처</th>                  
                   <th className="p-4">급수</th>
                   <th className="p-4">등록일</th>
-                  <th className="p-4">차량번호</th>
+                  <th className="p-4">{extraFieldLabel}</th>
                   <th className="p-4">비고</th>
                   <th className="p-4 text-center">관리</th>
                 </tr>
@@ -471,7 +485,7 @@ export default function MainPage() {
                   { id: "birth", label: "생년월일", ph: "1990-01-01" },
                   { id: "phone", label: "연락처", ph: "010-0000-0000" },
                   { id: "level", label: "급수 (A, B, C, D, 초심)", ph: "A" },
-                  { id: "carnumber", label: "차량번호", ph: "차량번호" },
+                  { id: "carnumber", label: extraFieldLabel, ph: `${extraFieldLabel} 입력` },
                   { id: "note", label: "비고", ph: "특이사항" },
                 ].map((input) => (
                   <div key={input.id}>
