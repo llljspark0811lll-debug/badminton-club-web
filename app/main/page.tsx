@@ -35,7 +35,7 @@ export default function MainPage() {
     name: "",
     gender: "",
     birth: "",
-    phone: "",    
+    phone: "",
     level: "",
     carnumber: "",
     note: "",
@@ -193,18 +193,18 @@ export default function MainPage() {
         m.id !== memberId
           ? m
           : {
-              ...m,
-              fees: (() => {
-                const exists = m.fees.find((f) => f.year === year && f.month === month);
-                if (exists) {
-                  return m.fees.map((f) =>
-                    f.year === year && f.month === month ? { ...f, paid: !currentPaid } : f
-                  );
-                } else {
-                  return [...m.fees, { id: Date.now(), year, month, paid: !currentPaid }];
-                }
-              })(),
-            }
+            ...m,
+            fees: (() => {
+              const exists = m.fees.find((f) => f.year === year && f.month === month);
+              if (exists) {
+                return m.fees.map((f) =>
+                  f.year === year && f.month === month ? { ...f, paid: !currentPaid } : f
+                );
+              } else {
+                return [...m.fees, { id: Date.now(), year, month, paid: !currentPaid }];
+              }
+            })(),
+          }
       )
     );
 
@@ -246,12 +246,12 @@ export default function MainPage() {
   return (
     <main className="min-h-screen bg-gray-100 p-6 font-sans">
       <div className="max-w-7xl mx-auto bg-white rounded-2xl shadow-lg p-6">
-        <h1 className="text-2xl font-bold mb-6 text-gray-900 flex items-center gap-2">
+        <h1 className="text-lg md:text-2xl font-bold mb-6 text-gray-900 flex items-center gap-2">
           🏸 회원 관리 시스템
         </h1>
 
         {/* ✅ 탭 메뉴 */}
-        <div className="flex gap-2 mb-6 border-b pb-4">
+        <div className="flex gap-2 mb-6 border-b pb-4 overflow-x-auto whitespace-nowrap">
           {[
             { id: "active", label: "활동 회원" },
             { id: "fees", label: "회비 관리" },
@@ -260,9 +260,10 @@ export default function MainPage() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`px-6 py-2 rounded-full text-sm font-semibold transition ${
-                activeTab === tab.id ? "bg-blue-600 text-white shadow-md" : "bg-gray-200 text-gray-600 hover:bg-gray-300"
-              }`}
+              className={`flex-shrink-0 px-6 py-2 rounded-full text-sm font-semibold transition ${activeTab === tab.id
+                ? "bg-blue-600 text-white shadow-md"
+                : "bg-gray-200 text-gray-600 hover:bg-gray-300"
+                }`}
             >
               {tab.label}
             </button>
@@ -271,14 +272,14 @@ export default function MainPage() {
 
         {/* ✅ 활동 회원 상단 필터/등록 바 */}
         {activeTab === "active" && (
-          <div className="flex justify-between items-center mb-6">
+          <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-6">
             <button
               onClick={() => setShowModal(true)}
               className="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-lg font-bold shadow-sm transition"
             >
               + 회원 등록
             </button>
-            
+
             <div className="flex items-center gap-3">
               <span className="text-sm font-bold text-gray-700">정렬 기준:</span>
               <select
@@ -315,12 +316,12 @@ export default function MainPage() {
             </div>
 
             <div className="overflow-x-auto border rounded-xl shadow-sm">
-              <table className="w-full text-sm">
+              <table className="min-w-[900px] w-full text-xs md:text-sm">
                 <thead className="bg-gray-100 border-b">
                   <tr>
                     <th className="p-2 md:p-4 border-r sticky left-0 bg-gray-100 z-10 w-24">이름</th>
-                    {Array.from({ length: 12 }, (_, i) => (<th key={i + 1} className="p-3 border-r">{i + 1}월</th>))}
-                    <th className="p-3">일괄</th>
+                    {Array.from({ length: 12 }, (_, i) => (<th key={i + 1} className="p-2 md:p-3 border-r">{i + 1}월</th>))}
+                    <th className="p-2 md:p-3">일괄</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -332,12 +333,12 @@ export default function MainPage() {
                         const feeRecord = m.fees?.find((f) => f.year === selectedYear && f.month === month);
                         const isPaid = feeRecord ? feeRecord.paid : false;
                         return (
-                          <td key={month} className="p-3 border-r cursor-pointer group" onClick={() => toggleFee(m.id, selectedYear, month, isPaid)}>
-                            <span className={`text-2xl transition-transform group-hover:scale-125 inline-block ${isPaid ? "text-red-500" : "text-gray-200"}`}>●</span>
+                          <td key={month} className="p-2 md:p-3 border-r cursor-pointer group" onClick={() => toggleFee(m.id, selectedYear, month, isPaid)}>
+                            <span className={`text-lg md:text-2xl transition-transform group-hover:scale-125 inline-block ${isPaid ? "text-red-500" : "text-gray-200"}`}>●</span>
                           </td>
                         );
                       })}
-                      <td className="p-3">
+                      <td className="p-2 md:p-3">
                         <button onClick={() => handleAllPaid(m.id)} className="bg-red-50 text-red-600 px-3 py-1 rounded-md text-xs font-bold hover:bg-red-600 hover:text-white transition">완납</button>
                       </td>
                     </tr>
@@ -357,7 +358,7 @@ export default function MainPage() {
                   <th className="p-2 md:p-4">이름</th>
                   <th className="p-2 md:p-4">성별</th>
                   <th className="p-2 md:p-4">생년월일</th>
-                  <th className="p-2 md:p-4">연락처</th>                  
+                  <th className="p-2 md:p-4">연락처</th>
                   <th className="p-2 md:p-4">급수</th>
                   <th className="p-2 md:p-4">등록일</th>
                   <th className="p-2 md:p-4">{customLabel}</th>
@@ -371,8 +372,8 @@ export default function MainPage() {
                     <td className="p-2 md:p-4 font-semibold">{m.name}</td>
                     <td className="p-2 md:p-4">
                       <span className={`px-2 py-1 rounded text-xs font-bold ${m.gender === "남"
-                          ? "bg-blue-100 text-blue-700"
-                          : "bg-pink-100 text-pink-700"
+                        ? "bg-blue-100 text-blue-700"
+                        : "bg-pink-100 text-pink-700"
                         }`}>
                         {m.gender}
                       </span>
@@ -384,8 +385,8 @@ export default function MainPage() {
                     <td className="p-2 md:p-4">
                       <span
                         className={`px-2 py-1 rounded text-sm ${m.gender === "남"
-                            ? "bg-blue-100 text-blue-700"
-                            : "bg-pink-100 text-pink-700"
+                          ? "bg-blue-100 text-blue-700"
+                          : "bg-pink-100 text-pink-700"
                           }`}
                       >
                         {m.level}
@@ -405,7 +406,7 @@ export default function MainPage() {
                                 name: m.name || "",
                                 gender: m.gender || "",
                                 birth: m.birth || "",
-                                phone: m.phone || "",                                
+                                phone: m.phone || "",
                                 level: m.level || "",
                                 carnumber: m.carnumber || "",
                                 note: m.note || "",
@@ -417,8 +418,8 @@ export default function MainPage() {
                             수정
                           </button>
                           {/* ✅ 삭제 버튼: 테두리 및 음영 추가 */}
-                          <button 
-                            onClick={() => handleDelete(m.id)} 
+                          <button
+                            onClick={() => handleDelete(m.id)}
                             className="px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-600 text-xs font-bold shadow-sm hover:bg-red-500 hover:text-white hover:border-red-500 transition-all active:scale-95"
                           >
                             삭제
@@ -427,15 +428,15 @@ export default function MainPage() {
                       ) : (
                         <>
                           {/* ✅ 복구 버튼: 테두리 및 음영 추가 */}
-                          <button 
-                            onClick={() => handleRestore(m.id)} 
+                          <button
+                            onClick={() => handleRestore(m.id)}
                             className="px-3 py-1.5 rounded-lg border border-green-200 bg-green-50 text-green-700 text-xs font-bold shadow-sm hover:bg-green-600 hover:text-white hover:border-green-600 transition-all active:scale-95"
                           >
                             복구
                           </button>
                           {/* ✅ 영구삭제 버튼: 테두리 및 음영 추가 */}
-                          <button 
-                            onClick={() => handlePermanentDelete(m.id)} 
+                          <button
+                            onClick={() => handlePermanentDelete(m.id)}
                             className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xs font-bold shadow-sm hover:bg-gray-800 hover:text-white hover:border-gray-800 transition-all active:scale-95"
                           >
                             영구삭제
@@ -451,14 +452,14 @@ export default function MainPage() {
         )}
 
         {/* ✅ 회원 등록/수정 모달 */}
-{showModal && (
+        {showModal && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center z-50">
-            <div className="bg-white p-6 rounded-2xl w-[420px] max-h-[85vh] overflow-y-auto shadow-2xl">
+            <div className="g-white p-6 rounded-2xl w-[95%] max-w-[420px] max-h-[85vh] overflow-y-auto shadow-2xl">
               <h2 className="text-xl font-bold mb-6 text-gray-800">{editingMember ? "회원 정보 수정" : "신규 회원 등록"}</h2>
               <div className="space-y-4">
                 <div>
                   <label className="text-xs font-bold text-gray-500 ml-1">이름</label>
-                  <input placeholder="홍길동" className="w-full border-gray-200 border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                  <input placeholder="홍길동" className="w-full border-gray-200 border p-2 md:p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
                 </div>
                 {/* ✅ 성별 입력 추가 */}
                 <div>
@@ -481,7 +482,7 @@ export default function MainPage() {
                 ].map((input) => (
                   <div key={input.id}>
                     <label className="text-xs font-bold text-gray-500 ml-1">{input.label}</label>
-                    <input placeholder={input.ph} className="w-full border-gray-200 border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={(form as any)[input.id]} onChange={(e) => setForm({ ...form, [input.id]: e.target.value })} />
+                    <input placeholder={input.ph} className="w-full border-gray-200 border p-2 md:p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={(form as any)[input.id]} onChange={(e) => setForm({ ...form, [input.id]: e.target.value })} />
                   </div>
                 ))}
               </div>
