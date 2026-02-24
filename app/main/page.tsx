@@ -453,8 +453,8 @@ export default function MainPage() {
 
         {/* ✅ 회원 등록/수정 모달 */}
         {showModal && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center z-50">
-            <div className="g-white p-6 rounded-2xl w-[95%] max-w-[420px] max-h-[85vh] overflow-y-auto shadow-2xl">
+          <div className="fixed inset-0 bg-black/50 bg-black/60 flex justify-center items-center z-50">
+            <div className="bg-white p-6 rounded-2xl w-[95%] max-w-[420px] max-h-[85vh] overflow-y-auto shadow-2xl">
               <h2 className="text-xl font-bold mb-6 text-gray-800">{editingMember ? "회원 정보 수정" : "신규 회원 등록"}</h2>
               <div className="space-y-4">
                 <div>
