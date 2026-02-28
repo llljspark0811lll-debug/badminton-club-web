@@ -1,138 +1,112 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import jwt from "jsonwebtoken";
+import { cookies } from "next/headers";
 
-/**
- * ✅ 회원 목록 조회
- */
-export async function GET(req: Request) {
+// 토큰에서 clubId 추출하는 공통 함수
+async function getClubId() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get("admin_token")?.value;
+  if (!token) return null;
+
   try {
-    const adminIdStr = req.headers.get("x-admin-id");
-    const adminId = adminIdStr ? Number(adminIdStr) : 1;
+    const decoded: any = jwt.verify(token, process.env.JWT_SECRET as string);
+    return decoded.clubId;
+  } catch {
+    return null;
+  }
+}
+
+// 1. 회원 목록 가져오기 (기존 코드)
+export async function GET() {
+  try {
+    const clubId = await getClubId();
+    if (!clubId) return NextResponse.json({ error: "인증 실패" }, { status: 401 });
 
     const members = await prisma.member.findMany({
-      where: { 
-        adminId,
-      },
-      include: { fees: true },
-      orderBy: { id: "desc" },
+      where: { clubId, deleted: false },
+      include: { fees: true }, // 회비 정보도 같이 가져오기
+      orderBy: { createdAt: "desc" },
     });
 
     return NextResponse.json(members);
   } catch (error) {
-    console.error("데이터 불러오기 에러:", error);
-    return NextResponse.json([], { status: 500 });
+    return NextResponse.json({ error: "서버 오류" }, { status: 500 });
   }
 }
 
-/**
- * ✅ 회원 등록
- */
+// 2. 회원 등록 (POST)
 export async function POST(req: Request) {
   try {
+    const clubId = await getClubId();
+    if (!clubId) return NextResponse.json({ error: "인증 실패" }, { status: 401 });
+
     const body = await req.json();
-    const { name, gender, birth, phone, level } = body;
-
-    if (!name || !gender || !birth || !phone || !level) {
-      return NextResponse.json(
-        { error: "필수 항목이 누락되었습니다." },
-        { status: 400 }
-      );
-    }
-
-    const adminIdStr = req.headers.get("x-admin-id");
-    const adminId = adminIdStr ? Number(adminIdStr) : 1;
+    const { name, gender, birth, phone, level, carnumber, note } = body;
 
     const newMember = await prisma.member.create({
       data: {
-        name: body.name,
-        gender: body.gender,
-        birth: body.birth,
-        phone: body.phone,
-        level: body.level,
-        carnumber: body.carnumber,
-        note: body.note,
-        adminId,
+        name,
+        gender,
+        birth,
+        phone,
+        level,
+        carnumber,
+        note,
+        clubId,
       },
-      include: { fees: true },
     });
 
     return NextResponse.json(newMember);
   } catch (error) {
-    console.error("등록 에러:", error);
     return NextResponse.json({ error: "등록 실패" }, { status: 500 });
   }
 }
 
-/**
- * ✅ 회원 수정
- */
+// 3. 회원 정보 수정 (PUT) - 이 부분이 없어서 405 에러가 났던 겁니다!
 export async function PUT(req: Request) {
   try {
+    const clubId = await getClubId();
+    if (!clubId) return NextResponse.json({ error: "인증 실패" }, { status: 401 });
+
     const body = await req.json();
     const { id, name, gender, birth, phone, level, carnumber, note } = body;
 
-    if (!name || !gender || !birth || !phone || !level) {
-      return NextResponse.json(
-        { error: "필수 항목이 누락되었습니다." },
-        { status: 400 }
-      );
-    }
-
-    const updated = await prisma.member.update({
+    const updatedMember = await prisma.member.update({
       where: { id: Number(id) },
       data: {
-        name: String(name || ""),
-        gender: String(gender || ""),
-        birth: String(birth || ""),
-        phone: String(phone || ""),
-        level: String(level || ""),
-        carnumber: String(carnumber || ""), // 👈 강제로 String으로 형변환해서 명시
-        note: String(note || ""),
+        name,
+        gender,
+        birth,
+        phone,
+        level,
+        carnumber,
+        note,
       },
-      include: { fees: true },
     });
 
-    return NextResponse.json(updated);
+    return NextResponse.json(updatedMember);
   } catch (error) {
-    console.error("🔥 수정 에러 상세:", error);
+    console.error("Update Error:", error);
     return NextResponse.json({ error: "수정 실패" }, { status: 500 });
   }
 }
 
-/**
- * ✅ 회원 삭제 (소프트 삭제)
- */
+// 4. 회원 삭제 (소프트 삭제 - DELETE)
 export async function DELETE(req: Request) {
   try {
-    const body = await req.json();
+    const clubId = await getClubId();
+    if (!clubId) return NextResponse.json({ error: "인증 실패" }, { status: 401 });
 
-    await prisma.member.update({
-      where: { id: Number(body.id) },
-      data: { deleted: true },
-    });
-
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error("삭제 에러:", error);
-    return NextResponse.json({ error: "삭제 실패" }, { status: 500 });
-  }
-}
-
-/**
- * ✅ 회원 복구
- */
-export async function PATCH(req: Request) {
-  try {
     const { id } = await req.json();
 
     await prisma.member.update({
       where: { id: Number(id) },
-      data: { deleted: false },
+      data: { deleted: true },
     });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ message: "삭제 성공" });
   } catch (error) {
-    console.error("복구 에러:", error);
-    return NextResponse.json({ error: "복구 실패" }, { status: 500 });
+    return NextResponse.json({ error: "삭제 실패" }, { status: 500 });
   }
 }

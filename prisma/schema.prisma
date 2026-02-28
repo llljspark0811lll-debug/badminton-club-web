@@ -1,95 +1,126 @@
 datasource db {
-
   provider  = "postgresql"
-
   url       = env("DATABASE_URL")
-
   directUrl = env("DIRECT_URL")
-
 }
-
-
 
 generator client {
-
   provider = "prisma-client-js"
-
 }
 
+//////////////////////////////////////////////////////
+// 🏸 클럽 (SaaS 핵심 단위)
+//////////////////////////////////////////////////////
 
+model Club {
+  id                 Int       @id @default(autoincrement())
+  name               String
+  code               String    @unique // 가입 링크용
+  subscriptionStatus String    @default("TRIAL") // TRIAL | ACTIVE | BLOCKED | EXPIRED
+  subscriptionEnd    DateTime?
+  createdAt          DateTime  @default(now())
+
+  admins          Admin[]
+  members         Member[]
+  memberRequest  MemberRequest[]
+}
+
+//////////////////////////////////////////////////////
+// 👤 관리자 (클럽 로그인 계정)
+//////////////////////////////////////////////////////
 
 model Admin {
+  id                 Int     @id @default(autoincrement())
+  username           String  @unique
+  password           String
+  role               String  @default("ADMIN") // SUPER_ADMIN 가능
+  status             String  @default("ACTIVE")
+  mustChangePassword Boolean @default(false)
 
-  id        Int       @id @default(autoincrement())
+  custom1Label       String  @default("차량번호") // 클럽별 커스텀 필드명
 
-  username  String    @unique
+  clubId Int
+  club   Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
 
-  password  String
-
-  createdAt DateTime  @default(now())
-
-  custom1Label String @default("차량번호")
-
-
-  members   Member[]
-
+  createdAt           DateTime             @default(now())
+  passwordResetTokens PasswordResetToken[]
 }
 
-
+//////////////////////////////////////////////////////
+// 👥 회원 (승인 완료된 정식 회원)
+//////////////////////////////////////////////////////
 
 model Member {
-
   id        Int      @id @default(autoincrement())
-
   name      String
-
-  gender    String 
-
+  gender    String
   birth     String
-
   phone     String
-
-  carnumber String   @default("")
-
   level     String
+  carnumber String   @default("")
+  note      String   @default("")
 
-  note      String
+  status    String   @default("pending") // pending | approved | rejected
+  createdAt   DateTime  @default(now())
+  deleted     Boolean   @default(false) // soft delete
+  withdrawnAt DateTime? // 탈퇴 처리일
 
-  fees      Fee[]
+  clubId Int
+  club   Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
 
-  createdAt DateTime @default(now())
-
-  deleted   Boolean  @default(false)
-
-
-
-  adminId   Int
-
-  admin     Admin    @relation(fields: [adminId], references: [id])
-
+  fees Fee[]
 }
 
+//////////////////////////////////////////////////////
+// 📝 회원 가입 신청 (승인 대기)
+//////////////////////////////////////////////////////
 
+model MemberRequest {
+  id        Int      @id @default(autoincrement())
+  name      String
+  gender    String
+  birth     String
+  phone     String
+  level     String
+  carnumber String   @default("")
+  note      String   @default("")
+
+  status      String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  createdAt   DateTime @default(now())
+  processedAt DateTime?
+
+  clubId Int
+  club   Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+}
+
+//////////////////////////////////////////////////////
+// 💰 회비 (월 단위)
+//////////////////////////////////////////////////////
 
 model Fee {
-
-  id        Int     @id @default(autoincrement())
-
-  memberId  Int
-
-  year      Int
-
-  month     Int
-
-  paid      Boolean @default(false)
-
-
+  id       Int     @id @default(autoincrement())
+  memberId Int
+  year     Int
+  month    Int
+  paid     Boolean @default(false)
 
   member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
-
-
   @@unique([memberId, year, month])
-
 }
 
+//////////////////////////////////////////////////////
+// 🔐 비밀번호 재설정 토큰
+//////////////////////////////////////////////////////
+
+model PasswordResetToken {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+
+  adminId Int
+  admin   Admin @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
