@@ -54,7 +54,7 @@ model Member {
   id        Int      @id @default(autoincrement())
   name      String
   gender    String
-  birth     String
+  birth     DateTime?
   phone     String
   level     String
   carnumber String   @default("")
@@ -63,6 +63,7 @@ model Member {
   status    String   @default("pending") // pending | approved | rejected
   createdAt   DateTime  @default(now())
   deleted     Boolean   @default(false) // soft delete
+  deletedAt DateTime?
   withdrawnAt DateTime? // 탈퇴 처리일
 
   clubId Int
@@ -79,7 +80,7 @@ model MemberRequest {
   id        Int      @id @default(autoincrement())
   name      String
   gender    String
-  birth     String
+  birth     DateTime?
   phone     String
   level     String
   carnumber String   @default("")

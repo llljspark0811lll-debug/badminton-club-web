@@ -19,6 +19,7 @@ interface Member {
   phone: string;
   level: string;
   createdAt: string | Date;
+  deletedAt?: string | Date; 
   note: string;
   carnumber: string;
   deleted?: boolean;
@@ -41,7 +42,7 @@ export default function Dashboard() {
   const [members, setMembers] = useState<Member[]>([]);
   const [requests, setRequests] = useState<Request[]>([]);
   const [activeTab, setActiveTab] = useState<"members" | "requests" | "fees" | "deleted">("members");
-  const [clubName, setClubName] = useState("로딩 중..."); // 초기값 변경
+  const [clubName, setClubName] = useState("로딩 중...");
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [sortBy, setSortBy] = useState<"name" | "date" | "level" | "gender">("name");
 
@@ -57,28 +58,17 @@ export default function Dashboard() {
     note: "",
   });
 
-  // 1. 클럽 이름 가져오기 함수 추가
   const fetchClubName = async () => {
     try {
-      const res = await fetch("/api/club-info", {
-        cache: 'no-store',
-        credentials: "include"
-      });
-
+      const res = await fetch("/api/club-info", { cache: 'no-store', credentials: "include" });
       if (res.ok) {
         const data = await res.json();
         if (data.name) {
-          // 💡 이 부분을 수정합니다!
           setClubName(`[${data.name}]`);
           localStorage.setItem("clubName", `[${data.name}]`);
         }
-      } else {
-        const backupName = localStorage.getItem("clubName");
-        setClubName(backupName || "[클럽]");
       }
-    } catch (err) {
-      setClubName("[클럽]");
-    }
+    } catch (err) { setClubName("[클럽]"); }
   };
 
   const fetchMembers = async () => {
@@ -86,9 +76,7 @@ export default function Dashboard() {
       const res = await fetch("/api/members", { credentials: "include" });
       const data = await res.json();
       if (Array.isArray(data)) setMembers(data);
-    } catch (err) {
-      console.error("멤버 로딩 실패:", err);
-    }
+    } catch (err) { console.error("멤버 로딩 실패:", err); }
   };
 
   const fetchRequests = async () => {
@@ -96,19 +84,15 @@ export default function Dashboard() {
       const res = await fetch("/api/member-request", { credentials: "include" });
       const data = await res.json();
       if (Array.isArray(data)) setRequests(data);
-    } catch (err) {
-      console.error("신청 목록 로딩 실패:", err);
-    }
+    } catch (err) { console.error("신청 목록 로딩 실패:", err); }
   };
 
   useEffect(() => {
-    fetchClubName(); // 페이지 진입 시 클럽명 가져오기
+    fetchClubName();
     fetchMembers();
     fetchRequests();
   }, []);
 
-  // --- 기존 로직 (sortMembers, handleSubmit, openEditModal 등은 동일하므로 생략 가능하나 흐름을 위해 유지) ---
-  
   const sortMembers = (memberList: Member[]) => {
     return [...memberList].sort((a, b) => {
       if (sortBy === "name") return a.name.localeCompare(b.name, "ko");
@@ -161,39 +145,8 @@ export default function Dashboard() {
     setShowModal(true);
   };
 
-  const handleApprove = async (id: number) => {
-    if (!confirm("이 신청을 승인하시겠습니까?")) return;
-    const res = await fetch("/api/member-request/approve", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
-      credentials: "include",
-    });
-    if (res.ok) {
-      alert("승인되었습니다. 회원에게 알림 문자가 발송됩니다."); // 문자 발송 안내 추가
-      fetchRequests();
-      fetchMembers();
-      setActiveTab("members");
-    }
-  };
-
-  // 거절 기능 추가 예시
-  const handleReject = async (id: number) => {
-    if (!confirm("정말 가입 신청을 거절하시겠습니까?")) return;
-    const res = await fetch("/api/member-request/reject", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
-      credentials: "include",
-    });
-    if (res.ok) {
-      alert("거절되었습니다. 회원에게 알림 문자가 발송됩니다.");
-      fetchRequests();
-    }
-  };
-
   const handleDelete = async (id: number) => {
-    if (!confirm("정말 삭제하시겠습니까?")) return;
+    if (!confirm("정말 삭제하시겠습니까? 탈퇴 회원 탭으로 이동합니다.")) return;
     const res = await fetch("/api/members", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
@@ -204,6 +157,7 @@ export default function Dashboard() {
   };
 
   const handleRestore = async (id: number) => {
+    if (!confirm("해당 회원을 복구하시겠습니까?")) return;
     const res = await fetch("/api/members", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -214,7 +168,7 @@ export default function Dashboard() {
   };
 
   const handlePermanentDelete = async (id: number) => {
-    if (!confirm("영구 삭제 시 복구가 불가능합니다. 계속하시겠습니까?")) return;
+    if (!confirm("영구 삭제 시 모든 회비 기록이 삭제되며 복구가 불가능합니다. 계속하시겠습니까?")) return;
     const res = await fetch("/api/members/permanent", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
@@ -234,12 +188,22 @@ export default function Dashboard() {
     if (res.ok) fetchMembers();
   };
 
+  const handleApprove = async (id: number) => {
+    if (!confirm("승인하시겠습니까?")) return;
+    const res = await fetch("/api/member-request/approve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+      credentials: "include",
+    });
+    if (res.ok) { fetchRequests(); fetchMembers(); setActiveTab("members"); }
+  };
+
   return (
     <main className="min-h-screen bg-gray-100 p-4 md:p-6 font-sans">
       <div className="max-w-7xl mx-auto bg-white rounded-2xl shadow-lg p-6">
         
         <div className="flex justify-between items-center mb-8">
-          {/* 💡 여기에 동적 클럽 이름 적용 */}
           <h1 className="text-xl md:text-2xl font-bold text-gray-900">🏸 {clubName} 회원관리</h1>
           <button onClick={() => { setEditingMember(null); setForm({ name: "", gender: "", birth: "", phone: "", level: "", carnumber: "", note: "" }); setShowModal(true); }} className="bg-blue-600 text-white px-4 py-2 rounded-xl font-bold shadow-md hover:bg-blue-700 transition">+ 직접 등록</button>
         </div>
@@ -263,12 +227,14 @@ export default function Dashboard() {
         )}
 
         <div className="overflow-x-auto border rounded-xl shadow-sm bg-white">
-          <table className="min-w-[1000px] w-full text-sm text-left">
+          <table className="min-w-[1100px] w-full text-sm text-left">
             <thead className="bg-gray-50 border-b text-gray-600">
               <tr>
                 <th className="p-4">이름</th>
                 <th className="p-4 text-center">성별</th>
                 <th className="p-4">생년월일</th>
+                {/* 💡 탈퇴 회원 탭일 때만 '탈퇴일' 칼럼 헤더 추가 */}
+                {activeTab === "deleted" && <th className="p-4 text-red-500 font-bold">탈퇴일</th>}
                 <th className="p-4">연락처</th>
                 <th className="p-4 text-center">급수</th>
                 {activeTab !== "fees" && <><th className="p-4">차량번호</th><th className="p-4">비고</th><th className="p-4 text-center">관리</th></>}
@@ -276,13 +242,14 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody className="divide-y">
+              {/* 활동 회원 */}
               {activeTab === "members" && activeMembers.map((m) => (
                 <tr key={m.id} className="hover:bg-blue-50/30 transition">
                   <td className="p-4 font-bold text-gray-800">{m.name}</td>
                   <td className="p-4 text-center"><span className={`px-2.5 py-1 rounded-full text-xs font-bold ${m.gender === "남" ? "bg-blue-100 text-blue-700" : "bg-pink-100 text-pink-700"}`}>{m.gender}</span></td>
                   <td className="p-4 text-gray-500">{new Date(m.birth as string).toLocaleDateString("ko-KR")}</td>
                   <td className="p-4 font-mono">{m.phone}</td>
-                  <td className="p-4 text-center"><span className={`px-3 py-1 rounded-lg text-xs font-black shadow-sm border ${m.gender === "남" ? "bg-white border-blue-200 text-blue-600" : "bg-white border-pink-200 text-pink-600"}`}>{m.level}</span></td>
+                  <td className="p-4 text-center font-bold text-blue-600">{m.level}</td>
                   <td className="p-4 text-gray-600">{m.carnumber || "-"}</td>
                   <td className="p-4 text-gray-400 text-xs truncate max-w-[150px]">{m.note || "-"}</td>
                   <td className="p-4 text-center space-x-2">
@@ -292,6 +259,7 @@ export default function Dashboard() {
                 </tr>
               ))}
 
+              {/* 가입 신청 */}
               {activeTab === "requests" && requests.map((r) => (
                 <tr key={r.id} className="bg-yellow-50/20 hover:bg-yellow-50 transition">
                   <td className="p-4 font-bold text-gray-800">{r.name}</td>
@@ -303,12 +271,12 @@ export default function Dashboard() {
                   <td className="p-4 text-gray-400 text-xs">{r.note || "-"}</td>
                   <td className="p-4 text-center space-x-2">
                     <button onClick={() => handleApprove(r.id)} className="px-5 py-1.5 rounded-lg bg-green-600 text-white text-xs font-bold shadow-md hover:bg-green-700 transition">승인</button>
-                    {/* 💡 거절 버튼 추가 */}
-                    <button onClick={() => handleReject(r.id)} className="px-5 py-1.5 rounded-lg bg-gray-500 text-white text-xs font-bold shadow-md hover:bg-gray-600 transition">거절</button>
+                    <button className="px-5 py-1.5 rounded-lg bg-gray-500 text-white text-xs font-bold shadow-md hover:bg-gray-600 transition">거절</button>
                   </td>
                 </tr>
               ))}
 
+              {/* 회비 관리 */}
               {activeTab === "fees" && activeMembers.map((m) => (
                 <tr key={m.id} className="hover:bg-gray-50 transition">
                   <td className="p-4 font-bold border-r">{m.name}</td>
@@ -328,18 +296,25 @@ export default function Dashboard() {
                 </tr>
               ))}
 
+              {/* 탈퇴 회원 */}
               {activeTab === "deleted" && deletedMembers.map((m) => (
                 <tr key={m.id} className="bg-gray-50 text-gray-400">
-                  <td className="p-4 font-bold line-through">{m.name}</td>
+                  <td className="p-4 font-bold line-through italic">{m.name}</td>
                   <td className="p-4 text-center">{m.gender}</td>
                   <td className="p-4">{new Date(m.birth as string).toLocaleDateString("ko-KR")}</td>
+                  
+                  {/* 💡 탈퇴 회원 탭 전용: 탈퇴 날짜 데이터 칸 추가 */}
+                  <td className="p-4 text-red-400 font-bold">
+                    {m.deletedAt ? new Date(m.deletedAt).toLocaleDateString("ko-KR") : "기록없음"}
+                  </td>
+
                   <td className="p-4 font-mono">{m.phone}</td>
                   <td className="p-4 text-center">{m.level}</td>
                   <td className="p-4">{m.carnumber || "-"}</td>
                   <td className="p-4 text-xs">탈퇴회원</td>
                   <td className="p-4 text-center space-x-2">
                     <button onClick={() => handleRestore(m.id)} className="px-3 py-1.5 rounded-lg border border-green-200 bg-green-50 text-green-700 text-xs font-bold hover:bg-green-600 hover:text-white transition">복구</button>
-                    <button onClick={() => handlePermanentDelete(m.id)} className="px-3 py-1.5 rounded-lg bg-gray-200 text-gray-600 text-xs font-bold hover:bg-red-600 hover:text-white transition">영구삭제</button>
+                    <button onClick={() => handlePermanentDelete(m.id)} className="px-3 py-1.5 rounded-lg bg-gray-800 text-white text-xs font-bold hover:bg-red-600 transition">영구삭제</button>
                   </td>
                 </tr>
               ))}
