@@ -19,7 +19,7 @@ interface Member {
   phone: string;
   level: string;
   createdAt: string | Date;
-  deletedAt?: string | Date; 
+  deletedAt?: string | Date;
   note: string;
   carnumber: string;
   deleted?: boolean;
@@ -178,14 +178,75 @@ export default function Dashboard() {
     if (res.ok) fetchMembers();
   };
 
+  // ✅ 회비 개별 토글 함수
   const toggleFee = async (memberId: number, year: number, month: number, currentPaid: boolean) => {
-    const res = await fetch("/api/fees", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ memberId, year, month, paid: !currentPaid }),
-      credentials: "include",
-    });
-    if (res.ok) fetchMembers();
+    try {
+      const res = await fetch("/api/fees", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          memberId: Number(memberId), 
+          year: Number(year), 
+          month: Number(month), 
+          paid: !currentPaid 
+        }),
+        credentials: "include",
+      });
+
+      // 응답이 JSON인지 확인
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        if (res.ok) {
+          await fetchMembers();
+        } else {
+          const errorData = await res.json();
+          alert(`서버 에러: ${errorData.error}`);
+        }
+      } else {
+        // HTML이 넘어온 경우 (404나 서버 뻗었을 때)
+        const text = await res.text();
+        console.error("HTML 응답 감지됨. 경로가 틀렸거나 서버가 터짐:", text.slice(0, 100));
+        alert("API 경로를 찾을 수 없거나 서버 에러가 발생했습니다.");
+      }
+    } catch (error) {
+      console.error("네트워크 에러:", error);
+    }
+  };
+
+  // ✅ 일괄 완납 처리
+  const handleAllPaid = async (memberId: number) => {
+    if (!confirm(`${selectedYear}년 전체를 완납 처리하시겠습니까?`)) return;
+    try {
+      const promises = Array.from({ length: 12 }, (_, i) => {
+        return fetch("/api/fees", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ memberId, year: selectedYear, month: i + 1, paid: true }),
+          credentials: "include",
+        });
+      });
+      await Promise.all(promises);
+      fetchMembers();
+      alert("전체 완납 처리되었습니다.");
+    } catch (error) { console.error(error); }
+  };
+
+  // ✅ 일괄 해제 처리 (추가된 기능)
+  const handleAllUnpaid = async (memberId: number) => {
+    if (!confirm(`${selectedYear}년 전체 납부 기록을 삭제/해제하시겠습니까?`)) return;
+    try {
+      const promises = Array.from({ length: 12 }, (_, i) => {
+        return fetch("/api/fees", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ memberId, year: selectedYear, month: i + 1, paid: false }),
+          credentials: "include",
+        });
+      });
+      await Promise.all(promises);
+      fetchMembers();
+      alert("전체 해제 처리되었습니다.");
+    } catch (error) { console.error(error); }
   };
 
   const handleApprove = async (id: number) => {
@@ -226,26 +287,56 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* -------------------- 회비 관리 상단 툴바 (연도 선택 등) -------------------- */}
+        {activeTab === "fees" && (
+          <div className="mb-4 p-4 bg-blue-50 rounded-xl flex flex-wrap justify-between items-center gap-4 animate-fadeIn">
+            <div className="flex gap-4 text-xs font-bold items-center">
+              <div className="flex items-center gap-1"><span className="text-gray-200 text-lg">●</span> 미납</div>
+              <div className="flex items-center gap-1"><span className="text-red-500 text-lg">●</span> 납부</div>
+            </div>
+            <select 
+              className="p-2 border rounded-lg bg-white text-sm font-bold shadow-sm outline-none focus:ring-2 focus:ring-blue-500"
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number(e.target.value))}
+            >
+              {[2024, 2025, 2026, 2027].map((y) => (
+                <option key={y} value={y}>{y}년 회비 현황</option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <div className="overflow-x-auto border rounded-xl shadow-sm bg-white">
           <table className="min-w-[1100px] w-full text-sm text-left">
             <thead className="bg-gray-50 border-b text-gray-600">
               <tr>
-                <th className="p-4">이름</th>
-                <th className="p-4 text-center">성별</th>
-                <th className="p-4">생년월일</th>
-                {/* 💡 탈퇴 회원 탭일 때만 '탈퇴일' 칼럼 헤더 추가 */}
-                {activeTab === "deleted" && <th className="p-4 text-red-500 font-bold">탈퇴일</th>}
-                <th className="p-4">연락처</th>
-                <th className="p-4 text-center">급수</th>
-                {activeTab !== "fees" && <><th className="p-4">차량번호</th><th className="p-4">비고</th><th className="p-4 text-center">관리</th></>}
-                {activeTab === "fees" && Array.from({ length: 12 }, (_, i) => <th key={i} className="p-2 text-center text-[11px] font-bold">{i + 1}월</th>)}
+                <th className="p-4 sticky left-0 bg-gray-50 z-10 border-r w-32">이름</th>
+                {activeTab !== "fees" && (
+                  <>
+                    <th className="p-4 text-center">성별</th>
+                    <th className="p-4">생년월일</th>
+                    {activeTab === "deleted" && <th className="p-4 text-red-500 font-bold">탈퇴일</th>}
+                    <th className="p-4">연락처</th>
+                    <th className="p-4 text-center">급수</th>
+                    <th className="p-4">차량번호</th>
+                    <th className="p-4">비고</th>
+                    <th className="p-4 text-center">관리</th>
+                  </>
+                )}
+                {activeTab === "fees" && (
+                  <>
+                    <th className="p-4 text-center border-r">급수</th>
+                    {Array.from({ length: 12 }, (_, i) => <th key={i} className="p-2 text-center text-[11px] font-bold border-r">{i + 1}월</th>)}
+                    <th className="p-4 text-center">일괄 작업</th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y">
               {/* 활동 회원 */}
               {activeTab === "members" && activeMembers.map((m) => (
                 <tr key={m.id} className="hover:bg-blue-50/30 transition">
-                  <td className="p-4 font-bold text-gray-800">{m.name}</td>
+                  <td className="p-4 font-bold text-gray-800 sticky left-0 bg-white z-10 border-r">{m.name}</td>
                   <td className="p-4 text-center"><span className={`px-2.5 py-1 rounded-full text-xs font-bold ${m.gender === "남" ? "bg-blue-100 text-blue-700" : "bg-pink-100 text-pink-700"}`}>{m.gender}</span></td>
                   <td className="p-4 text-gray-500">{new Date(m.birth as string).toLocaleDateString("ko-KR")}</td>
                   <td className="p-4 font-mono">{m.phone}</td>
@@ -262,7 +353,7 @@ export default function Dashboard() {
               {/* 가입 신청 */}
               {activeTab === "requests" && requests.map((r) => (
                 <tr key={r.id} className="bg-yellow-50/20 hover:bg-yellow-50 transition">
-                  <td className="p-4 font-bold text-gray-800">{r.name}</td>
+                  <td className="p-4 font-bold text-gray-800 sticky left-0 bg-white z-10 border-r">{r.name}</td>
                   <td className="p-4 text-center"><span className={`px-2.5 py-1 rounded-full text-xs font-bold ${r.gender === "남" ? "bg-blue-100 text-blue-700" : "bg-pink-100 text-pink-700"}`}>{r.gender}</span></td>
                   <td className="p-4 text-gray-500">{new Date(r.birth as string).toLocaleDateString("ko-KR")}</td>
                   <td className="p-4 font-mono">{r.phone}</td>
@@ -276,38 +367,36 @@ export default function Dashboard() {
                 </tr>
               ))}
 
-              {/* 회비 관리 */}
+              {/* 회비 관리 (복구된 포맷) */}
               {activeTab === "fees" && activeMembers.map((m) => (
-                <tr key={m.id} className="hover:bg-gray-50 transition">
-                  <td className="p-4 font-bold border-r">{m.name}</td>
-                  <td className="p-4 text-center border-r text-xs font-bold text-gray-400">{m.gender}</td>
-                  <td className="p-4 text-gray-400 text-xs">{new Date(m.birth as string).getFullYear()}년</td>
-                  <td className="p-4 font-mono text-xs border-r">{m.phone.slice(-4)}</td>
-                  <td className="p-4 text-center border-r font-black text-blue-600">{m.level}</td>
+                <tr key={m.id} className="hover:bg-gray-50 transition text-center">
+                  <td className="p-4 font-bold text-gray-800 sticky left-0 bg-white z-10 border-r">{m.name}</td>
+                  <td className="p-4 border-r font-bold text-blue-600 text-xs">{m.level}</td>
                   {Array.from({ length: 12 }, (_, i) => {
                     const month = i + 1;
                     const isPaid = m.fees?.find(f => f.year === selectedYear && f.month === month)?.paid;
                     return (
-                      <td key={month} className="p-0 text-center border-r cursor-pointer hover:bg-blue-50 transition" onClick={() => toggleFee(m.id, selectedYear, month, !!isPaid)}>
-                        <span className={`text-xl ${isPaid ? "text-red-500" : "text-gray-200"}`}>●</span>
+                      <td key={month} className="p-0 border-r cursor-pointer hover:bg-blue-50 transition" onClick={() => toggleFee(m.id, selectedYear, month, !!isPaid)}>
+                        <span className={`text-xl inline-block transition-transform hover:scale-125 ${isPaid ? "text-red-500" : "text-gray-200"}`}>●</span>
                       </td>
                     );
                   })}
+                  <td className="p-2 space-x-1">
+                    <button onClick={() => handleAllPaid(m.id)} className="px-2 py-1 bg-red-50 text-red-600 text-[10px] font-bold rounded border border-red-100 hover:bg-red-500 hover:text-white transition">완납</button>
+                    <button onClick={() => handleAllUnpaid(m.id)} className="px-2 py-1 bg-gray-50 text-gray-600 text-[10px] font-bold rounded border border-gray-200 hover:bg-gray-600 hover:text-white transition">해제</button>
+                  </td>
                 </tr>
               ))}
 
               {/* 탈퇴 회원 */}
               {activeTab === "deleted" && deletedMembers.map((m) => (
                 <tr key={m.id} className="bg-gray-50 text-gray-400">
-                  <td className="p-4 font-bold line-through italic">{m.name}</td>
+                  <td className="p-4 font-bold line-through italic sticky left-0 bg-gray-50 z-10 border-r">{m.name}</td>
                   <td className="p-4 text-center">{m.gender}</td>
                   <td className="p-4">{new Date(m.birth as string).toLocaleDateString("ko-KR")}</td>
-                  
-                  {/* 💡 탈퇴 회원 탭 전용: 탈퇴 날짜 데이터 칸 추가 */}
                   <td className="p-4 text-red-400 font-bold">
                     {m.deletedAt ? new Date(m.deletedAt).toLocaleDateString("ko-KR") : "기록없음"}
                   </td>
-
                   <td className="p-4 font-mono">{m.phone}</td>
                   <td className="p-4 text-center">{m.level}</td>
                   <td className="p-4">{m.carnumber || "-"}</td>
@@ -323,6 +412,7 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* 모달 부분 (동일) */}
       {showModal && (
         <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
           <div className="bg-white p-6 rounded-2xl w-full max-w-[420px] shadow-2xl animate-fadeIn">
