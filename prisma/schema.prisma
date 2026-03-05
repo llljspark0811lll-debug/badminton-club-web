@@ -18,11 +18,12 @@ model Club {
   code               String    @unique // 가입 링크용
   subscriptionStatus String    @default("TRIAL") // TRIAL | ACTIVE | BLOCKED | EXPIRED
   subscriptionEnd    DateTime?
+  payments           Payment[]
   createdAt          DateTime  @default(now())
 
   admins          Admin[]
   members         Member[]
-  memberRequest  MemberRequest[]
+  memberRequest   MemberRequest[]
 }
 
 //////////////////////////////////////////////////////
@@ -124,4 +125,18 @@ model PasswordResetToken {
   admin   Admin @relation(fields: [adminId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
+}
+
+model Payment {
+  id            Int      @id @default(autoincrement())
+  orderId       String   @unique // 토스 주문 ID
+  paymentKey    String?  // 토스 승인 키
+  amount        Int      // 결제 금액 (9900)
+  status        String   // READY | DONE | CANCELED
+  method        String?  // 카드, 가상계좌 등
+  orderName     String?  
+  createdAt     DateTime @default(now())
+  
+  clubId        Int
+  club          Club     @relation(fields: [clubId], references: [id])
 }

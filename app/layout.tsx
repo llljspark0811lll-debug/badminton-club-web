@@ -1,3 +1,5 @@
+<script src="https://js.tosspayments.com/v2/standard"></script>
+
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
