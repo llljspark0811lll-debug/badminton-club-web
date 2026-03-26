@@ -1,36 +1,84 @@
+import {
+  notFoundResponse,
+  requireAuthAdmin,
+  unauthorizedResponse,
+} from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   try {
+    const admin = await requireAuthAdmin();
+
+    if (!admin) {
+      return unauthorizedResponse();
+    }
+
     const { id } = await req.json();
+    const requestId = Number(id);
 
-    const request = await prisma.memberRequest.findUnique({ where: { id } });
-    if (!request) return NextResponse.json({ error: "신청 없음" }, { status: 404 });
+    const memberRequest = await prisma.memberRequest.findFirst({
+      where: {
+        id: requestId,
+        clubId: admin.clubId,
+      },
+    });
 
-    // 트랜잭션으로 안전하게 처리
-    await prisma.$transaction([
-      prisma.member.create({
+    if (!memberRequest) {
+      return notFoundResponse("가입 신청을 찾을 수 없습니다.");
+    }
+
+    if (memberRequest.status !== "PENDING") {
+      return NextResponse.json(
+        { error: "이미 처리된 가입 신청입니다." },
+        { status: 400 }
+      );
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const createdMember = await tx.member.create({
         data: {
-          name: request.name,
-          gender: request.gender,
-          birth: request.birth,
-          phone: request.phone,
-          level: request.level,
-          carnumber: request.carnumber,
-          note: request.note,
-          clubId: request.clubId,
+          name: memberRequest.name,
+          gender: memberRequest.gender,
+          birth: memberRequest.birth,
+          phone: memberRequest.phone,
+          level: memberRequest.level,
+          customFieldValue: memberRequest.customFieldValue,
+          note: memberRequest.note,
+          clubId: memberRequest.clubId,
           status: "approved",
         },
-      }),
-      prisma.memberRequest.update({
-        where: { id },
-        data: { status: "APPROVED", processedAt: new Date() },
-      }),
-    ]);
+      });
+
+      const specialFees = await tx.specialFee.findMany({
+        where: { clubId: memberRequest.clubId },
+        select: { id: true },
+      });
+
+      if (specialFees.length > 0) {
+        await tx.specialFeePayment.createMany({
+          data: specialFees.map((specialFee) => ({
+            specialFeeId: specialFee.id,
+            memberId: createdMember.id,
+          })),
+        });
+      }
+
+      await tx.memberRequest.update({
+        where: { id: memberRequest.id },
+        data: {
+          status: "APPROVED",
+          processedAt: new Date(),
+        },
+      });
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    return NextResponse.json({ error: "승인 처리 실패" }, { status: 500 });
+    console.error(error);
+    return NextResponse.json(
+      { error: "가입 승인 처리에 실패했습니다." },
+      { status: 500 }
+    );
   }
 }

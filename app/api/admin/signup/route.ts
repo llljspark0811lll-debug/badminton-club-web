@@ -1,10 +1,6 @@
-// app/api/admin/signup/route.ts
-
+import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
-
-const prisma = new PrismaClient();
 
 export async function POST(req: Request) {
   try {
@@ -18,13 +14,16 @@ export async function POST(req: Request) {
       );
     }
 
-    // 🔹 클럽 코드 소문자 통일
-    const normalizedCode = clubCode.toLowerCase();
+    const normalizedCode = String(clubCode).trim().toLowerCase();
 
-    // 🔹 중복 클럽 코드 체크
-    const existingClub = await prisma.club.findUnique({
-      where: { code: normalizedCode },
-    });
+    const [existingClub, existingAdmin] = await Promise.all([
+      prisma.club.findUnique({
+        where: { code: normalizedCode },
+      }),
+      prisma.admin.findUnique({
+        where: { username: String(username).trim() },
+      }),
+    ]);
 
     if (existingClub) {
       return NextResponse.json(
@@ -33,21 +32,26 @@ export async function POST(req: Request) {
       );
     }
 
-    // 🔹 비밀번호 해시
+    if (existingAdmin) {
+      return NextResponse.json(
+        { error: "이미 사용 중인 관리자 아이디입니다." },
+        { status: 400 }
+      );
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 🔹 트랜잭션으로 클럽 + 관리자 생성
     const result = await prisma.$transaction(async (tx) => {
       const club = await tx.club.create({
         data: {
-          name: clubName,
+          name: String(clubName).trim(),
           code: normalizedCode,
         },
       });
 
       await tx.admin.create({
         data: {
-          username,
+          username: String(username).trim(),
           password: hashedPassword,
           clubId: club.id,
           role: "SUPER_ADMIN",
@@ -58,13 +62,13 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({
-      message: "클럽 생성 완료",
+      message: "클럽이 생성되었습니다.",
       clubId: result.id,
     });
   } catch (error) {
     console.error(error);
     return NextResponse.json(
-      { error: "서버 오류 발생" },
+      { error: "서버 오류가 발생했습니다." },
       { status: 500 }
     );
   }

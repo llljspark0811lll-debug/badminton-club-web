@@ -1,36 +1,37 @@
 "use client";
 
-import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
-function FailContent() {
+function PaymentFailContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  
+
   const errorCode = searchParams.get("code");
   const errorMessage = searchParams.get("message");
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 text-center">
-        <div className="text-6xl mb-4">❌</div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">결제에 실패했습니다</h2>
-        
-        <div className="bg-red-50 rounded-xl p-4 mb-6 text-left">
-          <p className="text-xs text-red-400 font-bold uppercase mb-1">Error Code: {errorCode}</p>
-          <p className="text-sm text-red-700 font-medium leading-relaxed">
-            {errorMessage || "사용자가 결제를 취소했거나 알 수 없는 오류가 발생했습니다."}
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
+      <div className="w-full max-w-md rounded-[2rem] bg-white p-8 text-center shadow-xl">
+        <div className="text-5xl">⚠️</div>
+        <h1 className="mt-5 text-2xl font-black text-slate-900">
+          결제가 완료되지 않았습니다
+        </h1>
+        <div className="mt-5 rounded-2xl bg-rose-50 p-4 text-left">
+          <p className="text-xs font-bold uppercase text-rose-400">
+            Error Code: {errorCode ?? "-"}
+          </p>
+          <p className="mt-2 text-sm leading-6 text-rose-700">
+            {errorMessage ??
+              "사용자가 결제를 취소했거나 결제 처리 중 오류가 발생했습니다."}
           </p>
         </div>
-
-        <div className="space-y-3">
-          <button
-            onClick={() => router.push("/admin/dashboard")}
-            className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold hover:bg-black transition-all active:scale-95"
-          >
-            다시 시도하기
-          </button>
-        </div>
+        <button
+          onClick={() => router.push("/admin/dashboard")}
+          className="mt-6 w-full rounded-2xl bg-slate-900 px-4 py-4 text-sm font-bold text-white transition hover:bg-slate-800"
+        >
+          대시보드로 돌아가기
+        </button>
       </div>
     </div>
   );
@@ -38,8 +39,8 @@ function FailContent() {
 
 export default function PaymentFailPage() {
   return (
-    <Suspense fallback={<div>로딩 중...</div>}>
-      <FailContent />
+    <Suspense fallback={<div className="p-6">로딩 중...</div>}>
+      <PaymentFailContent />
     </Suspense>
   );
 }

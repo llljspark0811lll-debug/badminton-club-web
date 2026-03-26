@@ -1,11 +1,10 @@
-// app/api/admin/login/route.ts
-
+import { prisma } from "@/lib/prisma";
+import {
+  createToken,
+  setAuthCookie,
+} from "@/lib/auth";
 import { NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
-
-const prisma = new PrismaClient();
 
 export async function POST(request: Request) {
   try {
@@ -20,7 +19,7 @@ export async function POST(request: Request) {
     }
 
     const admin = await prisma.admin.findUnique({
-      where: { username },
+      where: { username: String(username).trim() },
     });
 
     if (!admin) {
@@ -30,7 +29,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const isMatch = await bcrypt.compare(password, admin.password);
+    const isMatch = await bcrypt.compare(
+      password,
+      admin.password
+    );
 
     if (!isMatch) {
       return NextResponse.json(
@@ -39,32 +41,23 @@ export async function POST(request: Request) {
       );
     }
 
-    const token = jwt.sign(
-      {
-        adminId: admin.id,
-        clubId: admin.clubId,
-        role: admin.role,
-      },
-      process.env.JWT_SECRET as string,
-      { expiresIn: "7d" }
-    );
+    const token = await createToken({
+      adminId: admin.id,
+      clubId: admin.clubId,
+      role: admin.role,
+    });
 
     const response = NextResponse.json({
-      message: "로그인 성공",
+      message: "로그인되었습니다.",
     });
 
-    response.cookies.set("admin_token", token, {
-      httpOnly: true,
-      secure: false,
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7,
-    });
+    setAuthCookie(response, token);
 
     return response;
   } catch (error) {
     console.error(error);
     return NextResponse.json(
-      { error: "서버 오류 발생" },
+      { error: "서버 오류가 발생했습니다." },
       { status: 500 }
     );
   }

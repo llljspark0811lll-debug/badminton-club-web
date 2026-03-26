@@ -1,25 +1,21 @@
+import {
+  requireAuthAdmin,
+  unauthorizedResponse,
+} from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import jwt from "jsonwebtoken";
-import { cookies } from "next/headers";
 
 export async function GET() {
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get("admin_token")?.value;
+    const admin = await requireAuthAdmin();
 
-    if (!token) {
-      return NextResponse.json({ error: "인증 토큰이 없습니다." }, { status: 401 });
+    if (!admin) {
+      return unauthorizedResponse();
     }
-
-    const decoded: any = jwt.verify(
-      token,
-      process.env.JWT_SECRET as string
-    );
 
     const requests = await prisma.memberRequest.findMany({
       where: {
-        clubId: decoded.clubId,
+        clubId: admin.clubId,
         status: "PENDING",
       },
       orderBy: { createdAt: "desc" },
@@ -27,7 +23,10 @@ export async function GET() {
 
     return NextResponse.json(requests);
   } catch (error) {
-    console.error("Member Request Fetch Error:", error);
-    return NextResponse.json({ error: "인증이 만료되었거나 잘못되었습니다." }, { status: 401 });
+    console.error(error);
+    return NextResponse.json(
+      { error: "가입 신청 목록을 불러오지 못했습니다." },
+      { status: 500 }
+    );
   }
 }

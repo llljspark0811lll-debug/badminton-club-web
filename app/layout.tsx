@@ -1,5 +1,3 @@
-<script src="https://js.tosspayments.com/v2/standard"></script>
-
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -15,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Badminton Club Management App",
-  description: "Badminton Club Management App",
+  title: "Badminton Club Management",
+  description: "배드민턴 클럽 운영 관리 서비스",
 };
 
 export default function RootLayout({
@@ -25,7 +23,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="ko">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

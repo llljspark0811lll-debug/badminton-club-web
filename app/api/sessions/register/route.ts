@@ -1,0 +1,122 @@
+import {
+  notFoundResponse,
+  requireAuthAdmin,
+  unauthorizedResponse,
+} from "@/lib/api-auth";
+import { prisma } from "@/lib/prisma";
+import {
+  getNextRegistrationStatus,
+  promoteWaitlistIfPossible,
+} from "@/lib/session-registration";
+import { NextResponse } from "next/server";
+
+export async function POST(req: Request) {
+  try {
+    const admin = await requireAuthAdmin();
+
+    if (!admin) {
+      return unauthorizedResponse();
+    }
+
+    const { sessionId, memberId } = await req.json();
+    const parsedSessionId = Number(sessionId);
+    const parsedMemberId = Number(memberId);
+
+    const [session, member] = await Promise.all([
+      prisma.clubSession.findFirst({
+        where: {
+          id: parsedSessionId,
+          clubId: admin.clubId,
+        },
+        include: {
+          participants: true,
+        },
+      }),
+      prisma.member.findFirst({
+        where: {
+          id: parsedMemberId,
+          clubId: admin.clubId,
+          deleted: false,
+        },
+      }),
+    ]);
+
+    if (!session) {
+      return notFoundResponse("?대룞 ?쇱젙??李얠쓣 ???놁뒿?덈떎.");
+    }
+
+    if (!member) {
+      return notFoundResponse("?깅줉???뚯썝??李얠쓣 ???놁뒿?덈떎.");
+    }
+
+    if (session.status !== "OPEN") {
+      return NextResponse.json(
+        { error: "?대┛ ?쇱젙?먯꽌留?李멸?瑜?愿由ы븷 ???덉뒿?덈떎." },
+        { status: 400 }
+      );
+    }
+
+    const existingParticipant = session.participants.find(
+      (participant) => participant.memberId === member.id
+    );
+
+    if (
+      existingParticipant &&
+      existingParticipant.status !== "CANCELED"
+    ) {
+      await prisma.sessionParticipant.update({
+        where: { id: existingParticipant.id },
+        data: {
+          status: "CANCELED",
+          attendanceStatus: "PENDING",
+          checkedInAt: null,
+        },
+      });
+
+      await promoteWaitlistIfPossible(prisma, session.id);
+
+      return NextResponse.json({
+        success: true,
+        action: "canceled",
+      });
+    }
+
+    const registeredCount = session.participants.filter(
+      (participant) => participant.status === "REGISTERED"
+    ).length;
+    const nextStatus = getNextRegistrationStatus(
+      session.capacity,
+      registeredCount
+    );
+
+    if (existingParticipant) {
+      await prisma.sessionParticipant.update({
+        where: { id: existingParticipant.id },
+        data: {
+          status: nextStatus,
+          attendanceStatus: "PENDING",
+          checkedInAt: null,
+        },
+      });
+    } else {
+      await prisma.sessionParticipant.create({
+        data: {
+          sessionId: session.id,
+          memberId: member.id,
+          status: nextStatus,
+        },
+      });
+    }
+
+    return NextResponse.json({
+      success: true,
+      action: nextStatus.toLowerCase(),
+    });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json(
+      { error: "李멸? ?좎껌 泥섎━???ㅽ뙣?덉뒿?덈떎." },
+      { status: 500 }
+    );
+  }
+}

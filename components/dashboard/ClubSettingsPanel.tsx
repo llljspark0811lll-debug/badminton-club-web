@@ -1,0 +1,99 @@
+"use client";
+
+type ClubSettingsPanelProps = {
+  customFieldLabel: string;
+  draftLabel: string;
+  saving: boolean;
+  joinLink: string;
+  onChangeDraft: (value: string) => void;
+  onSave: () => void;
+};
+
+export function ClubSettingsPanel({
+  customFieldLabel,
+  draftLabel,
+  saving,
+  joinLink,
+  onChangeDraft,
+  onSave,
+}: ClubSettingsPanelProps) {
+  async function handleCopyJoinLink() {
+    try {
+      await navigator.clipboard.writeText(joinLink);
+      alert("가입 신청 링크를 복사했습니다.");
+    } catch {
+      alert("가입 신청 링크 복사에 실패했습니다.");
+    }
+  }
+
+  return (
+    <section className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-sky-600">
+              클럽 설정
+            </p>
+            <h3 className="mt-2 text-2xl font-black text-slate-900">
+              회원 추가 정보 항목 이름
+            </h3>
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              클럽마다 필요한 추가 정보 이름을 바꿔서 쓸 수 있습니다.
+              차량번호, 소속클럽, 기수, 지역 같은 항목으로 유연하게
+              활용해보세요.
+            </p>
+            <p className="mt-3 text-sm font-semibold text-slate-700">
+              현재 항목 이름: {customFieldLabel}
+            </p>
+          </div>
+
+          <div className="flex w-full max-w-xl flex-col gap-3 sm:flex-row">
+            <input
+              value={draftLabel}
+              onChange={(event) => onChangeDraft(event.target.value)}
+              placeholder="예: 소속클럽"
+              className="flex-1 rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-sky-400"
+            />
+            <button
+              onClick={onSave}
+              disabled={saving}
+              className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              {saving ? "저장 중..." : "항목 저장"}
+            </button>
+          </div>
+        </div>
+
+        <div className="rounded-[1.5rem] bg-slate-50 p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-2xl">
+              <h4 className="text-lg font-black text-slate-900">
+                가입 신청 공유 링크
+              </h4>
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                이 링크를 카카오톡 단톡방이나 공지에 올리면, 신규
+                회원이 직접 가입 신청서를 작성할 수 있습니다.
+              </p>
+            </div>
+
+            <button
+              onClick={() => {
+                handleCopyJoinLink().catch(() => {
+                  alert("가입 신청 링크 복사에 실패했습니다.");
+                });
+              }}
+              disabled={!joinLink}
+              className="rounded-2xl bg-sky-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              링크 복사
+            </button>
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+            {joinLink || "클럽 정보를 불러오면 가입 신청 링크가 표시됩니다."}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}

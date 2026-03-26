@@ -1,27 +1,32 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
-
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    const joinToken = String(
+      body.joinToken ?? body.clubcode ?? ""
+    ).trim();
 
-    console.log("BODY:", body);
-    
-    if (!body.clubcode) {
+    if (!joinToken) {
       return NextResponse.json(
-        { error: "클럽 코드가 없습니다." },
+        { error: "?대읇 ?묐겕媛 ?놁뒿?덈떎." },
         { status: 400 }
       );
     }
 
-    const club = await prisma.club.findUnique({
-      where: { code: body.clubcode.toLowerCase() },
+    const club = await prisma.club.findFirst({
+      where: {
+        OR: [
+          { publicJoinToken: joinToken },
+          { code: joinToken.toLowerCase() },
+        ],
+      },
     });
 
     if (!club) {
       return NextResponse.json(
-        { error: "존재하지 않는 클럽입니다." },
+        { error: "議댁옱?섏? ?딅뒗 ?대읇?낅땲??" },
         { status: 404 }
       );
     }
@@ -30,10 +35,10 @@ export async function POST(req: Request) {
       data: {
         name: body.name,
         gender: body.gender,
-        birth: body.birth,
+        birth: body.birth ? new Date(body.birth) : null,
         phone: body.phone,
         level: body.level,
-        carnumber: body.carnumber || "",
+        customFieldValue: body.customFieldValue || "",
         note: body.note || "",
         clubId: club.id,
       },
@@ -43,7 +48,7 @@ export async function POST(req: Request) {
   } catch (error) {
     console.error(error);
     return NextResponse.json(
-      { error: "서버 오류" },
+      { error: "?쒕쾭 ?ㅻ쪟" },
       { status: 500 }
     );
   }
