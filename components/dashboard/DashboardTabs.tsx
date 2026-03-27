@@ -29,7 +29,7 @@ export function DashboardTabs({
         <button
           key={tab.id}
           onClick={() => onChange(tab.id)}
-          className={`inline-flex shrink-0 snap-start items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition ${
+          className={`inline-flex shrink-0 snap-start items-center gap-2 whitespace-nowrap rounded-full px-4 py-2.5 text-sm font-semibold transition ${
             activeTab === tab.id
               ? "bg-slate-900 text-white shadow-md"
               : "bg-white text-slate-600 ring-1 ring-inset ring-slate-200 hover:bg-slate-50"

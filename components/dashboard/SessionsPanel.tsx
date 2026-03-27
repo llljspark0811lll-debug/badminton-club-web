@@ -34,11 +34,19 @@ type SessionsPanelProps = {
   ) => Promise<void>;
 };
 
+function getTodayDateInputValue() {
+  const now = new Date();
+  const offsetDate = new Date(
+    now.getTime() - now.getTimezoneOffset() * 60 * 1000
+  );
+  return offsetDate.toISOString().split("T")[0];
+}
+
 const initialForm = {
   title: "",
   description: "",
   location: "",
-  date: "",
+  date: getTodayDateInputValue(),
   startTime: "19:00",
   endTime: "21:00",
   capacity: "",
@@ -93,7 +101,10 @@ export function SessionsPanel({
 
     try {
       await onCreateSession(form);
-      setForm(initialForm);
+      setForm({
+        ...initialForm,
+        date: getTodayDateInputValue(),
+      });
     } catch (error) {
       const message =
         error instanceof Error
@@ -153,7 +164,7 @@ export function SessionsPanel({
               placeholder="장소"
               className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-sky-400"
             />
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <input
                 type="date"
                 value={form.date}
@@ -179,7 +190,7 @@ export function SessionsPanel({
                 className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-sky-400"
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <input
                 type="time"
                 value={form.startTime}
@@ -379,7 +390,7 @@ export function SessionsPanel({
                   </button>
                 </div>
 
-                <div className="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+                <div className="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs leading-7 text-slate-600 sm:text-sm break-all">
                   {publicSessionLink}
                 </div>
               </div>

@@ -17,6 +17,19 @@ type FeesTableProps = {
 
 type FeeQuickFilter = "ALL" | "UNPAID" | "PAID";
 
+function getYearOptions(selectedYear: number) {
+  const currentYear = new Date().getFullYear();
+  const years = new Set<number>();
+
+  for (let year = currentYear - 3; year <= currentYear + 3; year += 1) {
+    years.add(year);
+  }
+
+  years.add(selectedYear);
+
+  return [...years].sort((left, right) => right - left);
+}
+
 export function FeesTable({
   members,
   selectedYear,
@@ -27,6 +40,11 @@ export function FeesTable({
 }: FeesTableProps) {
   const [quickFilter, setQuickFilter] =
     useState<FeeQuickFilter>("ALL");
+
+  const yearOptions = useMemo(
+    () => getYearOptions(selectedYear),
+    [selectedYear]
+  );
 
   const filteredMembers = useMemo(() => {
     if (quickFilter === "ALL") {
@@ -67,7 +85,7 @@ export function FeesTable({
         </div>
 
         <div className="flex flex-col gap-3 md:flex-row md:items-center">
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setQuickFilter("ALL")}
               className={`rounded-xl px-3 py-2 text-xs font-bold transition ${
@@ -100,14 +118,19 @@ export function FeesTable({
             </button>
           </div>
 
-          <input
-            type="number"
+          <select
             value={selectedYear}
             onChange={(event) =>
               onChangeYear(Number(event.target.value))
             }
-            className="w-28 rounded-2xl border border-slate-200 px-4 py-3 text-center font-semibold outline-none transition focus:border-sky-400"
-          />
+            className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none transition focus:border-sky-400 md:w-36"
+          >
+            {yearOptions.map((year) => (
+              <option key={year} value={year}>
+                {year}년
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 

@@ -39,8 +39,7 @@ export function ClubSettingsPanel({
             </h3>
             <p className="mt-2 text-sm leading-6 text-slate-500">
               클럽마다 필요한 추가 정보 이름을 바꿔서 쓸 수 있습니다.
-              차량번호, 소속클럽, 기수, 지역 같은 항목으로 유연하게
-              활용해보세요.
+              차량번호, 소속클럽, 기수, 지역 같은 항목으로 유연하게 활용해보세요.
             </p>
             <p className="mt-3 text-sm font-semibold text-slate-700">
               현재 항목 이름: {customFieldLabel}
@@ -71,8 +70,8 @@ export function ClubSettingsPanel({
                 가입 신청 공유 링크
               </h4>
               <p className="mt-2 text-sm leading-6 text-slate-500">
-                이 링크를 카카오톡 단톡방이나 공지에 올리면, 신규
-                회원이 직접 가입 신청서를 작성할 수 있습니다.
+                이 링크를 카카오톡 단톡방이나 공지에 올리면, 신규 회원이 직접
+                가입 신청서를 작성할 수 있습니다.
               </p>
             </div>
 
@@ -89,7 +88,7 @@ export function ClubSettingsPanel({
             </button>
           </div>
 
-          <div className="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs leading-7 text-slate-600 sm:text-sm break-all">
             {joinLink || "클럽 정보를 불러오면 가입 신청 링크가 표시됩니다."}
           </div>
         </div>
