@@ -1,23 +1,34 @@
 import { prisma } from "@/lib/prisma";
+import { verifyPublicMemberToken } from "@/lib/public-member-auth";
 import {
   getNextRegistrationStatus,
-  normalizePhoneNumber,
   promoteWaitlistIfPossible,
 } from "@/lib/session-registration";
 import { NextResponse } from "next/server";
+
+function sanitizeGuestNames(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => String(item ?? "").trim())
+    .filter(Boolean)
+    .slice(0, 5);
+}
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     const token = String(body.token ?? "").trim();
-    const name = String(body.name ?? "").trim();
-    const phone = normalizePhoneNumber(String(body.phone ?? ""));
+    const rememberToken = String(body.rememberToken ?? "").trim();
     const action =
       body.action === "CANCEL" ? "CANCEL" : "REGISTER";
+    const guestNames = sanitizeGuestNames(body.guestNames);
 
-    if (!token || !name || !phone) {
+    if (!token || !rememberToken) {
       return NextResponse.json(
-        { error: "이름과 전화번호를 입력해주세요." },
+        { error: "회원 확인 정보가 필요합니다." },
         { status: 400 }
       );
     }
@@ -25,11 +36,9 @@ export async function POST(req: Request) {
     const session = await prisma.clubSession.findUnique({
       where: { publicToken: token },
       include: {
-        participants: true,
-        club: {
-          select: {
-            id: true,
-            publicJoinToken: true,
+        participants: {
+          orderBy: {
+            createdAt: "asc",
           },
         },
       },
@@ -42,43 +51,71 @@ export async function POST(req: Request) {
       );
     }
 
-    const member = await prisma.member.findFirst({
-      where: {
-        clubId: session.club.id,
-        deleted: false,
-        name,
-      },
-    });
+    const payload = await verifyPublicMemberToken(rememberToken);
 
-    if (!member || normalizePhoneNumber(member.phone) !== phone) {
+    if (!payload || payload.clubId !== session.clubId) {
       return NextResponse.json(
         {
           error:
-            "회원 정보를 찾을 수 없습니다. 먼저 가입 신청 후 운영진 승인을 받아주세요.",
-          joinToken: session.club.publicJoinToken,
+            "자동 인식 정보가 만료되었습니다. 다시 이름과 전화번호 뒤 4자리를 입력해주세요.",
+        },
+        { status: 401 }
+      );
+    }
+
+    const member = await prisma.member.findFirst({
+      where: {
+        id: payload.memberId,
+        clubId: session.clubId,
+        deleted: false,
+      },
+    });
+
+    if (!member) {
+      return NextResponse.json(
+        {
+          error:
+            "회원 정보를 찾을 수 없습니다. 다시 본인 확인을 진행해주세요.",
         },
         { status: 404 }
       );
     }
 
     if (action === "CANCEL") {
-      const participant = session.participants.find(
+      const activeOwnedParticipants = session.participants.filter(
         (item) =>
-          item.memberId === member.id &&
-          item.status !== "CANCELED"
+          item.status !== "CANCELED" &&
+          (item.memberId === member.id ||
+            item.hostMemberId === member.id)
       );
 
-      if (participant) {
-        await prisma.sessionParticipant.update({
-          where: { id: participant.id },
-          data: {
-            status: "CANCELED",
-            attendanceStatus: "PENDING",
-            checkedInAt: null,
-          },
-        });
+      const freedRegisteredCount = activeOwnedParticipants.filter(
+        (item) => item.status === "REGISTERED"
+      ).length;
 
-        await promoteWaitlistIfPossible(prisma, session.id);
+      if (activeOwnedParticipants.length > 0) {
+        await prisma.$transaction(async (tx) => {
+          await tx.sessionParticipant.updateMany({
+            where: {
+              id: {
+                in: activeOwnedParticipants.map((item) => item.id),
+              },
+            },
+            data: {
+              status: "CANCELED",
+              attendanceStatus: "PENDING",
+              checkedInAt: null,
+            },
+          });
+
+          for (
+            let index = 0;
+            index < freedRegisteredCount;
+            index += 1
+          ) {
+            await promoteWaitlistIfPossible(tx, session.id);
+          }
+        });
       }
 
       return NextResponse.json({
@@ -94,39 +131,161 @@ export async function POST(req: Request) {
       );
     }
 
-    const existingParticipant = session.participants.find(
+    const existingMemberParticipant = session.participants.find(
       (item) => item.memberId === member.id
     );
-    const registeredCount = session.participants.filter(
+    const existingGuestParticipants = session.participants.filter(
+      (item) => item.hostMemberId === member.id
+    );
+
+    const previousRegisteredCount = [
+      existingMemberParticipant,
+      ...existingGuestParticipants,
+    ].filter(
+      (item) => item && item.status === "REGISTERED"
+    ).length;
+
+    const excludedIds = [
+      existingMemberParticipant?.id,
+      ...existingGuestParticipants.map((item) => item.id),
+    ].filter((value): value is number => Boolean(value));
+
+    const otherParticipants = session.participants.filter(
+      (item) =>
+        item.status !== "CANCELED" &&
+        !excludedIds.includes(item.id)
+    );
+
+    let registeredCount = otherParticipants.filter(
       (item) => item.status === "REGISTERED"
     ).length;
-    const nextStatus = getNextRegistrationStatus(
+
+    const createdAt = new Date();
+    const memberStatus = getNextRegistrationStatus(
       session.capacity,
       registeredCount
     );
 
-    if (existingParticipant) {
-      await prisma.sessionParticipant.update({
-        where: { id: existingParticipant.id },
-        data: {
-          status: nextStatus,
-          attendanceStatus: "PENDING",
-          checkedInAt: null,
-        },
-      });
-    } else {
-      await prisma.sessionParticipant.create({
-        data: {
-          sessionId: session.id,
-          memberId: member.id,
-          status: nextStatus,
-        },
-      });
+    if (memberStatus === "REGISTERED") {
+      registeredCount += 1;
     }
+
+    const guestStatuses = guestNames.map(() => {
+      const status = getNextRegistrationStatus(
+        session.capacity,
+        registeredCount
+      );
+
+      if (status === "REGISTERED") {
+        registeredCount += 1;
+      }
+
+      return status;
+    });
+
+    const nextRegisteredCount =
+      (memberStatus === "REGISTERED" ? 1 : 0) +
+      guestStatuses.filter((status) => status === "REGISTERED")
+        .length;
+
+    const freedRegisteredCount = Math.max(
+      0,
+      previousRegisteredCount - nextRegisteredCount
+    );
+
+    await prisma.$transaction(async (tx) => {
+      if (existingMemberParticipant) {
+        await tx.sessionParticipant.update({
+          where: { id: existingMemberParticipant.id },
+          data: {
+            memberId: member.id,
+            guestName: null,
+            hostMemberId: null,
+            status: memberStatus,
+            attendanceStatus: "PENDING",
+            checkedInAt: null,
+            createdAt,
+          },
+        });
+      } else {
+        await tx.sessionParticipant.create({
+          data: {
+            sessionId: session.id,
+            memberId: member.id,
+            status: memberStatus,
+            attendanceStatus: "PENDING",
+            checkedInAt: null,
+            createdAt,
+          },
+        });
+      }
+
+      for (let index = 0; index < guestNames.length; index += 1) {
+        const existingGuest = existingGuestParticipants[index];
+
+        if (existingGuest) {
+          await tx.sessionParticipant.update({
+            where: { id: existingGuest.id },
+            data: {
+              memberId: null,
+              guestName: guestNames[index],
+              hostMemberId: member.id,
+              status: guestStatuses[index],
+              attendanceStatus: "PENDING",
+              checkedInAt: null,
+              createdAt,
+            },
+          });
+        } else {
+          await tx.sessionParticipant.create({
+            data: {
+              sessionId: session.id,
+              guestName: guestNames[index],
+              hostMemberId: member.id,
+              status: guestStatuses[index],
+              attendanceStatus: "PENDING",
+              checkedInAt: null,
+              createdAt,
+            },
+          });
+        }
+      }
+
+      const extraGuests = existingGuestParticipants.slice(
+        guestNames.length
+      );
+
+      if (extraGuests.length > 0) {
+        await tx.sessionParticipant.updateMany({
+          where: {
+            id: {
+              in: extraGuests.map((item) => item.id),
+            },
+          },
+          data: {
+            status: "CANCELED",
+            attendanceStatus: "PENDING",
+            checkedInAt: null,
+          },
+        });
+      }
+
+      for (
+        let index = 0;
+        index < freedRegisteredCount;
+        index += 1
+      ) {
+        await promoteWaitlistIfPossible(tx, session.id);
+      }
+    });
 
     return NextResponse.json({
       success: true,
-      status: nextStatus,
+      status: memberStatus,
+      guestCount: guestNames.length,
+      waitlistGuestCount: guestStatuses.filter(
+        (status) => status === "WAITLIST"
+      ).length,
     });
   } catch (error) {
     console.error(error);
