@@ -7,14 +7,11 @@ export async function GET(
 ) {
   try {
     const { clubcode } = await context.params;
-    const accessKey = String(clubcode).trim();
+    const accessToken = String(clubcode).trim();
 
-    const club = await prisma.club.findFirst({
+    const club = await prisma.club.findUnique({
       where: {
-        OR: [
-          { publicJoinToken: accessKey },
-          { code: accessKey.toLowerCase() },
-        ],
+        publicJoinToken: accessToken,
       },
       include: {
         admins: {
@@ -31,7 +28,7 @@ export async function GET(
 
     if (!club) {
       return NextResponse.json(
-        { error: "?대읇??李얠쓣 ???놁뒿?덈떎." },
+        { error: "클럽 정보를 찾을 수 없습니다." },
         { status: 404 }
       );
     }
@@ -40,12 +37,12 @@ export async function GET(
       name: club.name,
       publicJoinToken: club.publicJoinToken,
       customFieldLabel:
-        club.admins[0]?.customFieldLabel ?? "李⑤웾踰덊샇",
+        club.admins[0]?.customFieldLabel ?? "추가 정보",
     });
   } catch (error) {
     console.error(error);
     return NextResponse.json(
-      { error: "?대읇 ?ㅼ젙??遺덈윭?ㅼ? 紐삵뻽?듬땲??" },
+      { error: "클럽 정보를 불러오지 못했습니다." },
       { status: 500 }
     );
   }

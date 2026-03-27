@@ -25,7 +25,7 @@ async function main() {
     console.error(
       [
         "DB 초기화는 매우 파괴적인 작업입니다.",
-        "계속하려면 아래처럼 --force 옵션을 붙여 실행하세요.",
+        "계속하려면 아래처럼 --force 옵션을 붙여 실행해주세요.",
         "",
         "npm run db:reset -- --force",
       ].join("\n")
@@ -34,9 +34,14 @@ async function main() {
     return;
   }
 
-  console.log("원격 DB 초기화를 시작합니다...");
+  console.log("테스트용 DB 초기화를 시작합니다...");
+  await prisma.$executeRawUnsafe(
+    'ALTER TABLE "Club" DROP COLUMN IF EXISTS "code";'
+  );
   await prisma.$executeRawUnsafe(RESET_SQL);
-  console.log("DB 초기화가 완료되었습니다. 이제 /admin/signup에서 새 클럽을 만들면 됩니다.");
+  console.log(
+    "DB 초기화가 완료되었습니다. 이제 /admin/signup 에서 새 클럽을 만들면 됩니다."
+  );
 }
 
 main()

@@ -1,36 +1,22 @@
+import bcrypt from "bcrypt";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import bcrypt from "bcrypt";
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { clubName, clubCode, username, password } = body;
+    const { clubName, username, password } = body;
 
-    if (!clubName || !clubCode || !username || !password) {
+    if (!clubName || !username || !password) {
       return NextResponse.json(
-        { error: "모든 값을 입력해주세요." },
+        { error: "클럽 이름, 아이디, 비밀번호를 입력해주세요." },
         { status: 400 }
       );
     }
 
-    const normalizedCode = String(clubCode).trim().toLowerCase();
-
-    const [existingClub, existingAdmin] = await Promise.all([
-      prisma.club.findUnique({
-        where: { code: normalizedCode },
-      }),
-      prisma.admin.findUnique({
-        where: { username: String(username).trim() },
-      }),
-    ]);
-
-    if (existingClub) {
-      return NextResponse.json(
-        { error: "이미 존재하는 클럽 코드입니다." },
-        { status: 400 }
-      );
-    }
+    const existingAdmin = await prisma.admin.findUnique({
+      where: { username: String(username).trim() },
+    });
 
     if (existingAdmin) {
       return NextResponse.json(
@@ -45,7 +31,6 @@ export async function POST(req: Request) {
       const club = await tx.club.create({
         data: {
           name: String(clubName).trim(),
-          code: normalizedCode,
         },
       });
 

@@ -1,0 +1,2 @@
+ALTER TABLE "Club"
+DROP COLUMN IF EXISTS "code";

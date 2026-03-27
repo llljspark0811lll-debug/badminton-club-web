@@ -4,29 +4,24 @@ import { NextResponse } from "next/server";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const joinToken = String(
-      body.joinToken ?? body.clubcode ?? ""
-    ).trim();
+    const joinToken = String(body.joinToken ?? "").trim();
 
     if (!joinToken) {
       return NextResponse.json(
-        { error: "?대읇 ?묐겕媛 ?놁뒿?덈떎." },
+        { error: "가입 링크 정보가 올바르지 않습니다." },
         { status: 400 }
       );
     }
 
-    const club = await prisma.club.findFirst({
+    const club = await prisma.club.findUnique({
       where: {
-        OR: [
-          { publicJoinToken: joinToken },
-          { code: joinToken.toLowerCase() },
-        ],
+        publicJoinToken: joinToken,
       },
     });
 
     if (!club) {
       return NextResponse.json(
-        { error: "議댁옱?섏? ?딅뒗 ?대읇?낅땲??" },
+        { error: "가입할 클럽을 찾을 수 없습니다." },
         { status: 404 }
       );
     }
@@ -48,7 +43,7 @@ export async function POST(req: Request) {
   } catch (error) {
     console.error(error);
     return NextResponse.json(
-      { error: "?쒕쾭 ?ㅻ쪟" },
+      { error: "가입 신청 저장에 실패했습니다." },
       { status: 500 }
     );
   }
