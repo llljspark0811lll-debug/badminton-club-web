@@ -6,6 +6,14 @@ import {
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
+const feeSelect = {
+  id: true,
+  memberId: true,
+  year: true,
+  month: true,
+  paid: true,
+} as const;
+
 async function findClubMember(memberId: number, clubId: number) {
   return prisma.member.findFirst({
     where: {
@@ -40,18 +48,13 @@ export async function GET(req: Request) {
     const fees = await prisma.fee.findMany({
       where: {
         year,
+        paid: true,
         member: {
           clubId: admin.clubId,
           deleted: false,
         },
       },
-      select: {
-        id: true,
-        memberId: true,
-        year: true,
-        month: true,
-        paid: true,
-      },
+      select: feeSelect,
     });
 
     return NextResponse.json(fees);
@@ -97,6 +100,24 @@ export async function POST(req: Request) {
       );
     }
 
+    if (!paid) {
+      await prisma.fee.deleteMany({
+        where: {
+          memberId: member.id,
+          year,
+          month,
+        },
+      });
+
+      return NextResponse.json({
+        id: 0,
+        memberId: member.id,
+        year,
+        month,
+        paid: false,
+      });
+    }
+
     const fee = await prisma.fee.upsert({
       where: {
         memberId_year_month: {
@@ -105,20 +126,14 @@ export async function POST(req: Request) {
           month,
         },
       },
-      update: { paid },
+      update: { paid: true },
       create: {
         memberId: member.id,
         year,
         month,
-        paid,
-      },
-      select: {
-        id: true,
-        memberId: true,
-        year: true,
-        month: true,
         paid: true,
       },
+      select: feeSelect,
     });
 
     return NextResponse.json(fee);
@@ -159,33 +174,48 @@ export async function PUT(req: Request) {
       );
     }
 
-    const fees = await prisma.$transaction(
-      Array.from({ length: 12 }, (_, index) =>
-        prisma.fee.upsert({
-          where: {
-            memberId_year_month: {
-              memberId: member.id,
-              year,
-              month: index + 1,
-            },
-          },
-          update: { paid },
-          create: {
-            memberId: member.id,
-            year,
-            month: index + 1,
-            paid,
-          },
-          select: {
-            id: true,
-            memberId: true,
-            year: true,
-            month: true,
-            paid: true,
-          },
-        })
-      )
-    );
+    if (!paid) {
+      await prisma.fee.deleteMany({
+        where: {
+          memberId: member.id,
+          year,
+        },
+      });
+
+      return NextResponse.json([]);
+    }
+
+    const fees = await prisma.$transaction(async (tx) => {
+      await tx.fee.updateMany({
+        where: {
+          memberId: member.id,
+          year,
+          paid: false,
+        },
+        data: {
+          paid: true,
+        },
+      });
+
+      await tx.fee.createMany({
+        data: Array.from({ length: 12 }, (_, index) => ({
+          memberId: member.id,
+          year,
+          month: index + 1,
+          paid: true,
+        })),
+        skipDuplicates: true,
+      });
+
+      return tx.fee.findMany({
+        where: {
+          memberId: member.id,
+          year,
+          paid: true,
+        },
+        select: feeSelect,
+      });
+    });
 
     return NextResponse.json(fees);
   } catch (error) {

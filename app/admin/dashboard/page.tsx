@@ -132,6 +132,8 @@ export default function DashboardPage() {
     useState(false);
   const [membersLoaded, setMembersLoaded] = useState(false);
   const [requestsLoaded, setRequestsLoaded] = useState(false);
+  const [specialFeesLoaded, setSpecialFeesLoaded] =
+    useState(false);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [loadingRequests, setLoadingRequests] = useState(false);
 
@@ -254,6 +256,8 @@ export default function DashboardPage() {
       "/api/special-fees"
     );
 
+    setSpecialFeesLoaded(true);
+
     setSpecialFees((current) =>
       nextSpecialFees.map((specialFee) => {
         const existing = current.find(
@@ -369,11 +373,11 @@ export default function DashboardPage() {
     Promise.all([
       membersLoaded ? Promise.resolve() : refreshMembers(),
       refreshFees(selectedYear),
-      refreshSpecialFees(),
+      specialFeesLoaded ? Promise.resolve() : refreshSpecialFees(),
     ]).catch((error: Error) => {
       alert(error.message);
     });
-  }, [activeTab, selectedYear]);
+  }, [activeTab, selectedYear, membersLoaded, specialFeesLoaded]);
 
   useEffect(() => {
     if (
@@ -421,6 +425,11 @@ export default function DashboardPage() {
       (specialFee) => specialFee.id === selectedSpecialFeeId
     );
 
+    if (!selectedSpecialFee) {
+      setSelectedSpecialFeeId(null);
+      return;
+    }
+
     if (selectedSpecialFee?.payments) {
       return;
     }
@@ -428,11 +437,7 @@ export default function DashboardPage() {
     refreshSpecialFeeDetail(
       selectedSpecialFeeId,
       true
-    ).catch(
-      (error: Error) => {
-        alert(error.message);
-      }
-    );
+    ).catch(() => undefined);
   }, [activeTab, selectedSpecialFeeId, specialFees]);
 
   useEffect(() => {
@@ -688,20 +693,12 @@ export default function DashboardPage() {
 
     setFees((current) => {
       const key = `${memberId}-${year}-${month}`;
-      let replaced = false;
+      const nextFees = current.filter(
+        (fee) =>
+          `${fee.memberId}-${fee.year}-${fee.month}` !== key
+      );
 
-      const nextFees = current.map((fee) => {
-        if (
-          `${fee.memberId}-${fee.year}-${fee.month}` === key
-        ) {
-          replaced = true;
-          return updatedFee;
-        }
-
-        return fee;
-      });
-
-      if (!replaced) {
+      if (updatedFee.paid) {
         nextFees.push(updatedFee);
       }
 
