@@ -17,6 +17,7 @@ type SessionsPanelProps = {
   sessions: ClubSession[];
   selectedSessionId: number | null;
   publicSessionBaseUrl: string;
+  loadingSelectedSession: boolean;
   onSelectSession: (id: number) => void;
   onCreateSession: (payload: {
     title: string;
@@ -39,6 +40,7 @@ function getTodayDateInputValue() {
   const offsetDate = new Date(
     now.getTime() - now.getTimezoneOffset() * 60 * 1000
   );
+
   return offsetDate.toISOString().split("T")[0];
 }
 
@@ -68,6 +70,7 @@ export function SessionsPanel({
   sessions,
   selectedSessionId,
   publicSessionBaseUrl,
+  loadingSelectedSession,
   onSelectSession,
   onCreateSession,
   onDeleteSession,
@@ -137,8 +140,8 @@ export function SessionsPanel({
             운동 일정 만들기
           </h3>
           <p className="mt-2 text-sm text-slate-500">
-            날짜, 시간, 장소, 정원을 입력하면 카카오톡 공유용 참석 링크까지
-            바로 만들어집니다.
+            날짜, 시간, 장소, 정원을 입력하면 카카오톡 공유용
+            참석 링크까지 바로 만들 수 있습니다.
           </p>
 
           <div className="mt-5 space-y-3">
@@ -281,8 +284,8 @@ export function SessionsPanel({
                     {session.endTime}
                   </div>
                   <div className="mt-2 text-sm opacity-80">
-                    참석 {getRegisteredParticipants(session).length}명 / 대기{" "}
-                    {getWaitlistedParticipants(session).length}명
+                    참석 {session.registeredCount ?? 0}명 / 대기{" "}
+                    {session.waitlistedCount ?? 0}명
                   </div>
                 </button>
               );
@@ -313,7 +316,8 @@ export function SessionsPanel({
                   </div>
                   <p className="mt-2 text-sm text-slate-500">
                     {formatDate(selectedSession.date)}{" "}
-                    {selectedSession.startTime} - {selectedSession.endTime}
+                    {selectedSession.startTime} -{" "}
+                    {selectedSession.endTime}
                     {selectedSession.location
                       ? ` · ${selectedSession.location}`
                       : ""}
@@ -374,14 +378,17 @@ export function SessionsPanel({
                       카카오톡 공유 링크
                     </p>
                     <p className="mt-2 text-sm leading-6 text-slate-600">
-                      단톡방에 이 링크를 올리면 회원이 직접 참석 신청과 취소를
-                      할 수 있어요. 게스트도 함께 등록됩니다.
+                      단톡방에 이 링크를 올리면 회원이 직접 참석
+                      신청과 취소를 할 수 있고, 게스트도 같이
+                      등록됩니다.
                     </p>
                   </div>
                   <button
                     onClick={() => {
                       handleCopyLink().catch(() => {
-                        alert("운동 일정 링크 복사에 실패했습니다.");
+                        alert(
+                          "운동 일정 링크 복사에 실패했습니다."
+                        );
                       });
                     }}
                     className="rounded-2xl bg-sky-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-sky-700"
@@ -390,7 +397,7 @@ export function SessionsPanel({
                   </button>
                 </div>
 
-                <div className="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs leading-7 text-slate-600 sm:text-sm break-all">
+                <div className="mt-4 break-all rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs leading-7 text-slate-600 sm:text-sm">
                   {publicSessionLink}
                 </div>
               </div>
@@ -410,7 +417,8 @@ export function SessionsPanel({
                   참석 인원
                 </p>
                 <p className="mt-2 text-2xl font-black text-slate-900">
-                  {registeredParticipants.length}
+                  {selectedSession.registeredCount ??
+                    registeredParticipants.length}
                 </p>
               </div>
               <div className="rounded-2xl bg-slate-50 p-4">
@@ -418,144 +426,152 @@ export function SessionsPanel({
                   대기 인원
                 </p>
                 <p className="mt-2 text-2xl font-black text-slate-900">
-                  {waitlistedParticipants.length}
+                  {selectedSession.waitlistedCount ??
+                    waitlistedParticipants.length}
                 </p>
               </div>
             </div>
 
-            <div className="mt-6 space-y-6">
-              <section className="overflow-hidden rounded-[1.5rem] border border-slate-200">
-                <div className="border-b border-slate-200 bg-slate-50 px-4 py-4">
-                  <h4 className="text-base font-black text-slate-900">
-                    참석 신청 명단
-                  </h4>
-                  <p className="mt-1 text-sm text-slate-500">
-                    링크로 실제 참석 신청한 사람만 표시됩니다.
-                  </p>
-                </div>
+            {loadingSelectedSession ? (
+              <div className="mt-6 rounded-[1.5rem] bg-slate-50 px-4 py-12 text-center text-sm text-slate-400">
+                참석 명단을 불러오는 중입니다.
+              </div>
+            ) : (
+              <div className="mt-6 space-y-6">
+                <section className="overflow-hidden rounded-[1.5rem] border border-slate-200">
+                  <div className="border-b border-slate-200 bg-slate-50 px-4 py-4">
+                    <h4 className="text-base font-black text-slate-900">
+                      참석 신청 명단
+                    </h4>
+                    <p className="mt-1 text-sm text-slate-500">
+                      링크로 실제 참석 신청한 사람만 표시됩니다.
+                    </p>
+                  </div>
 
-                <div className="overflow-x-auto">
-                  <table className="min-w-[520px] w-full text-sm">
-                    <thead className="bg-white text-left text-slate-500">
-                      <tr>
-                        <th className="px-4 py-4 font-semibold">이름</th>
-                        <th className="px-4 py-4 font-semibold">구분</th>
-                        <th className="px-4 py-4 font-semibold">연락처/메모</th>
-                        <th className="px-4 py-4 font-semibold">상태</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {registeredParticipants.map((participant) => (
-                        <tr
-                          key={participant.id}
-                          className="hover:bg-slate-50"
-                        >
-                          <td className="px-4 py-4 font-bold text-slate-900">
-                            {getParticipantDisplayName(participant)}
-                          </td>
-                          <td className="px-4 py-4">
-                            <span
-                              className={`rounded-full px-2.5 py-1 text-xs font-bold ${
-                                isGuestParticipant(participant)
-                                  ? "bg-amber-50 text-amber-700"
-                                  : "bg-sky-50 text-sky-700"
-                              }`}
-                            >
-                              {isGuestParticipant(participant)
-                                ? "게스트"
-                                : "회원"}
-                            </span>
-                          </td>
-                          <td className="px-4 py-4 text-slate-500">
-                            {getParticipantMetaText(participant)}
-                          </td>
-                          <td className="px-4 py-4 text-slate-500">
-                            {getParticipantStatusLabel(participant.status)}
-                          </td>
-                        </tr>
-                      ))}
-
-                      {registeredParticipants.length === 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-[520px] w-full text-sm">
+                      <thead className="bg-white text-left text-slate-500">
                         <tr>
-                          <td
-                            colSpan={4}
-                            className="px-4 py-12 text-center text-sm text-slate-400"
-                          >
-                            아직 참석 신청한 인원이 없습니다.
-                          </td>
+                          <th className="px-4 py-4 font-semibold">이름</th>
+                          <th className="px-4 py-4 font-semibold">구분</th>
+                          <th className="px-4 py-4 font-semibold">연락처/메모</th>
+                          <th className="px-4 py-4 font-semibold">상태</th>
                         </tr>
-                      ) : null}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {registeredParticipants.map((participant) => (
+                          <tr
+                            key={participant.id}
+                            className="hover:bg-slate-50"
+                          >
+                            <td className="px-4 py-4 font-bold text-slate-900">
+                              {getParticipantDisplayName(participant)}
+                            </td>
+                            <td className="px-4 py-4">
+                              <span
+                                className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                                  isGuestParticipant(participant)
+                                    ? "bg-amber-50 text-amber-700"
+                                    : "bg-sky-50 text-sky-700"
+                                }`}
+                              >
+                                {isGuestParticipant(participant)
+                                  ? "게스트"
+                                  : "회원"}
+                              </span>
+                            </td>
+                            <td className="px-4 py-4 text-slate-500">
+                              {getParticipantMetaText(participant)}
+                            </td>
+                            <td className="px-4 py-4 text-slate-500">
+                              {getParticipantStatusLabel(participant.status)}
+                            </td>
+                          </tr>
+                        ))}
 
-              <section className="overflow-hidden rounded-[1.5rem] border border-slate-200">
-                <div className="border-b border-slate-200 bg-slate-50 px-4 py-4">
-                  <h4 className="text-base font-black text-slate-900">
-                    대기 인원 명단
-                  </h4>
-                  <p className="mt-1 text-sm text-slate-500">
-                    정원 초과 후 신청한 인원은 자동으로 대기로 이동합니다.
-                  </p>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="min-w-[520px] w-full text-sm">
-                    <thead className="bg-white text-left text-slate-500">
-                      <tr>
-                        <th className="px-4 py-4 font-semibold">이름</th>
-                        <th className="px-4 py-4 font-semibold">구분</th>
-                        <th className="px-4 py-4 font-semibold">연락처/메모</th>
-                        <th className="px-4 py-4 font-semibold">상태</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {waitlistedParticipants.map((participant) => (
-                        <tr
-                          key={participant.id}
-                          className="hover:bg-slate-50"
-                        >
-                          <td className="px-4 py-4 font-bold text-slate-900">
-                            {getParticipantDisplayName(participant)}
-                          </td>
-                          <td className="px-4 py-4">
-                            <span
-                              className={`rounded-full px-2.5 py-1 text-xs font-bold ${
-                                isGuestParticipant(participant)
-                                  ? "bg-amber-50 text-amber-700"
-                                  : "bg-sky-50 text-sky-700"
-                              }`}
+                        {registeredParticipants.length === 0 ? (
+                          <tr>
+                            <td
+                              colSpan={4}
+                              className="px-4 py-12 text-center text-sm text-slate-400"
                             >
-                              {isGuestParticipant(participant)
-                                ? "게스트"
-                                : "회원"}
-                            </span>
-                          </td>
-                          <td className="px-4 py-4 text-slate-500">
-                            {getParticipantMetaText(participant)}
-                          </td>
-                          <td className="px-4 py-4 text-slate-500">
-                            {getParticipantStatusLabel(participant.status)}
-                          </td>
-                        </tr>
-                      ))}
+                              아직 참석 신청한 인원이 없습니다.
+                            </td>
+                          </tr>
+                        ) : null}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
 
-                      {waitlistedParticipants.length === 0 ? (
+                <section className="overflow-hidden rounded-[1.5rem] border border-slate-200">
+                  <div className="border-b border-slate-200 bg-slate-50 px-4 py-4">
+                    <h4 className="text-base font-black text-slate-900">
+                      대기 인원 명단
+                    </h4>
+                    <p className="mt-1 text-sm text-slate-500">
+                      정원 초과 뒤 신청된 인원은 자동으로 대기로
+                      이동합니다.
+                    </p>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="min-w-[520px] w-full text-sm">
+                      <thead className="bg-white text-left text-slate-500">
                         <tr>
-                          <td
-                            colSpan={4}
-                            className="px-4 py-12 text-center text-sm text-slate-400"
-                          >
-                            현재 대기 인원이 없습니다.
-                          </td>
+                          <th className="px-4 py-4 font-semibold">이름</th>
+                          <th className="px-4 py-4 font-semibold">구분</th>
+                          <th className="px-4 py-4 font-semibold">연락처/메모</th>
+                          <th className="px-4 py-4 font-semibold">상태</th>
                         </tr>
-                      ) : null}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-            </div>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {waitlistedParticipants.map((participant) => (
+                          <tr
+                            key={participant.id}
+                            className="hover:bg-slate-50"
+                          >
+                            <td className="px-4 py-4 font-bold text-slate-900">
+                              {getParticipantDisplayName(participant)}
+                            </td>
+                            <td className="px-4 py-4">
+                              <span
+                                className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                                  isGuestParticipant(participant)
+                                    ? "bg-amber-50 text-amber-700"
+                                    : "bg-sky-50 text-sky-700"
+                                }`}
+                              >
+                                {isGuestParticipant(participant)
+                                  ? "게스트"
+                                  : "회원"}
+                              </span>
+                            </td>
+                            <td className="px-4 py-4 text-slate-500">
+                              {getParticipantMetaText(participant)}
+                            </td>
+                            <td className="px-4 py-4 text-slate-500">
+                              {getParticipantStatusLabel(participant.status)}
+                            </td>
+                          </tr>
+                        ))}
+
+                        {waitlistedParticipants.length === 0 ? (
+                          <tr>
+                            <td
+                              colSpan={4}
+                              className="px-4 py-12 text-center text-sm text-slate-400"
+                            >
+                              현재 대기 인원이 없습니다.
+                            </td>
+                          </tr>
+                        ) : null}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              </div>
+            )}
           </>
         ) : (
           <div className="flex h-full min-h-[360px] items-center justify-center rounded-[1.5rem] bg-slate-50 text-sm font-medium text-slate-400">

@@ -89,7 +89,9 @@ export interface ClubSession {
   capacity: number | null;
   status: "OPEN" | "CLOSED" | "CANCELED";
   createdAt: string | Date;
-  participants: SessionParticipant[];
+  registeredCount?: number;
+  waitlistedCount?: number;
+  participants?: SessionParticipant[];
 }
 
 export interface ClubInfo {

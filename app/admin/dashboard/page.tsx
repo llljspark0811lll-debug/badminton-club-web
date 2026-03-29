@@ -128,6 +128,8 @@ export default function DashboardPage() {
     useState<number[]>([]);
   const [loadingSpecialFeeDetail, setLoadingSpecialFeeDetail] =
     useState(false);
+  const [loadingSessionDetail, setLoadingSessionDetail] =
+    useState(false);
 
   const paymentMode = getPaymentMode();
   const subscriptionAmount = getSubscriptionAmount();
@@ -163,12 +165,10 @@ export default function DashboardPage() {
       nextClubInfo,
       nextMembers,
       nextRequests,
-      nextSessions,
     ] = await Promise.all([
       requestJson<ClubInfo>("/api/club-info"),
       requestJson<Member[]>("/api/members"),
       requestJson<MemberRequest[]>("/api/member-request"),
-      requestJson<ClubSession[]>("/api/sessions"),
     ]);
 
     setClubInfo(nextClubInfo);
@@ -176,7 +176,6 @@ export default function DashboardPage() {
     setAdminEmailDraft(nextClubInfo.adminEmail);
     setMembers(nextMembers);
     setRequests(nextRequests);
-    setSessions(nextSessions);
   }
 
   async function refreshMembers() {
@@ -190,7 +189,56 @@ export default function DashboardPage() {
   }
 
   async function refreshSessions() {
-    setSessions(await requestJson<ClubSession[]>("/api/sessions"));
+    const nextSessions = await requestJson<ClubSession[]>(
+      "/api/sessions"
+    );
+
+    setSessions((current) =>
+      nextSessions.map((session) => {
+        const existing = current.find(
+          (item) => item.id === session.id
+        );
+
+        return existing?.participants
+          ? { ...session, participants: existing.participants }
+          : session;
+      })
+    );
+
+    setSelectedSessionId((current) => {
+      if (!nextSessions.length) {
+        return null;
+      }
+
+      const exists = nextSessions.some(
+        (session) => session.id === current
+      );
+
+      return exists ? current : nextSessions[0].id;
+    });
+  }
+
+  async function refreshSessionDetail(sessionId: number) {
+    setLoadingSessionDetail(true);
+
+    try {
+      const detail = await requestJson<ClubSession>(
+        `/api/sessions?id=${sessionId}`
+      );
+
+      setSessions((current) =>
+        current.map((session) =>
+          session.id === sessionId
+            ? {
+                ...session,
+                ...detail,
+              }
+            : session
+        )
+      );
+    } finally {
+      setLoadingSessionDetail(false);
+    }
   }
 
   async function refreshSpecialFees() {
@@ -273,21 +321,6 @@ export default function DashboardPage() {
   }, [router]);
 
   useEffect(() => {
-    if (!sessions.length) {
-      setSelectedSessionId(null);
-      return;
-    }
-
-    const selectedExists = sessions.some(
-      (session) => session.id === selectedSessionId
-    );
-
-    if (!selectedExists) {
-      setSelectedSessionId(sessions[0].id);
-    }
-  }, [selectedSessionId, sessions]);
-
-  useEffect(() => {
     if (activeTab !== "fees") {
       return;
     }
@@ -298,6 +331,43 @@ export default function DashboardPage() {
       }
     );
   }, [activeTab, selectedYear]);
+
+  useEffect(() => {
+    if (
+      activeTab !== "sessions" &&
+      activeTab !== "attendance"
+    ) {
+      return;
+    }
+
+    refreshSessions().catch((error: Error) => {
+      alert(error.message);
+    });
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (
+      (activeTab !== "sessions" &&
+        activeTab !== "attendance") ||
+      !selectedSessionId
+    ) {
+      return;
+    }
+
+    const selectedSession = sessions.find(
+      (session) => session.id === selectedSessionId
+    );
+
+    if (selectedSession?.participants) {
+      return;
+    }
+
+    refreshSessionDetail(selectedSessionId).catch(
+      (error: Error) => {
+        alert(error.message);
+      }
+    );
+  }, [activeTab, selectedSessionId, sessions]);
 
   useEffect(() => {
     if (activeTab !== "fees" || !selectedSpecialFeeId) {
@@ -322,7 +392,19 @@ export default function DashboardPage() {
   useEffect(() => {
     const refreshLiveData = () => {
       void refreshRequests().catch(() => undefined);
-      void refreshSessions().catch(() => undefined);
+
+      if (
+        activeTab === "sessions" ||
+        activeTab === "attendance"
+      ) {
+        void refreshSessions().catch(() => undefined);
+
+        if (selectedSessionId) {
+          void refreshSessionDetail(selectedSessionId).catch(
+            () => undefined
+          );
+        }
+      }
     };
 
     const handleVisibilityChange = () => {
@@ -347,7 +429,7 @@ export default function DashboardPage() {
         handleVisibilityChange
       );
     };
-  }, []);
+  }, [activeTab, selectedSessionId]);
 
   useEffect(() => {
     if (window.TossPayments) {
@@ -639,6 +721,13 @@ export default function DashboardPage() {
       if (activeTab === "fees") {
         void refreshSpecialFees().catch(() => undefined);
       }
+
+      if (
+        activeTab === "sessions" ||
+        activeTab === "attendance"
+      ) {
+        void refreshSessions().catch(() => undefined);
+      }
     } finally {
       setApprovingRequestIds((current) =>
         current.filter((requestId) => requestId !== id)
@@ -675,6 +764,7 @@ export default function DashboardPage() {
 
     await refreshSessions();
     setSelectedSessionId(created.id);
+    await refreshSessionDetail(created.id);
   }
 
   async function handleDeleteSession(sessionId: number) {
@@ -764,6 +854,7 @@ export default function DashboardPage() {
     });
 
     await refreshSessions();
+    await refreshSessionDetail(sessionId);
   }
 
   async function handleUpdateAttendance(
@@ -782,7 +873,9 @@ export default function DashboardPage() {
       }),
     });
 
-    await refreshSessions();
+    if (selectedSessionId) {
+      await refreshSessionDetail(selectedSessionId);
+    }
   }
 
   return (
@@ -926,6 +1019,7 @@ export default function DashboardPage() {
             sessions={sessions}
             selectedSessionId={selectedSessionId}
             publicSessionBaseUrl={publicSessionBaseUrl}
+            loadingSelectedSession={loadingSessionDetail}
             onSelectSession={setSelectedSessionId}
             onCreateSession={handleCreateSession}
             onDeleteSession={handleDeleteSession}
@@ -937,6 +1031,7 @@ export default function DashboardPage() {
           <AttendancePanel
             sessions={sessions}
             selectedSessionId={selectedSessionId}
+            loadingSelectedSession={loadingSessionDetail}
             onSelectSession={setSelectedSessionId}
             onUpdateAttendance={handleUpdateAttendance}
           />

@@ -6,7 +6,59 @@ import {
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
-export async function GET() {
+async function getSessionSummaries(clubId: number) {
+  const sessions = await prisma.clubSession.findMany({
+    where: { clubId },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      location: true,
+      publicToken: true,
+      date: true,
+      startTime: true,
+      endTime: true,
+      capacity: true,
+      status: true,
+      createdAt: true,
+    },
+    orderBy: [{ date: "desc" }, { startTime: "desc" }],
+  });
+
+  const counts =
+    sessions.length === 0
+      ? []
+      : await prisma.sessionParticipant.groupBy({
+          by: ["sessionId", "status"],
+          where: {
+            sessionId: {
+              in: sessions.map((session) => session.id),
+            },
+          },
+          _count: {
+            _all: true,
+          },
+        });
+
+  const countMap = new Map<string, number>();
+
+  for (const row of counts) {
+    countMap.set(
+      `${row.sessionId}-${row.status}`,
+      row._count._all
+    );
+  }
+
+  return sessions.map((session) => ({
+    ...session,
+    registeredCount:
+      countMap.get(`${session.id}-REGISTERED`) ?? 0,
+    waitlistedCount:
+      countMap.get(`${session.id}-WAITLIST`) ?? 0,
+  }));
+}
+
+export async function GET(req: Request) {
   try {
     const admin = await requireAuthAdmin();
 
@@ -14,26 +66,57 @@ export async function GET() {
       return unauthorizedResponse();
     }
 
-    const sessions = await prisma.clubSession.findMany({
-      where: { clubId: admin.clubId },
-      include: {
-        participants: {
-          include: {
-            member: true,
-            hostMember: true,
-          },
-          orderBy: {
-            createdAt: "asc",
+    const { searchParams } = new URL(req.url);
+    const sessionId = Number(searchParams.get("id"));
+
+    if (Number.isFinite(sessionId)) {
+      const session = await prisma.clubSession.findFirst({
+        where: {
+          id: sessionId,
+          clubId: admin.clubId,
+        },
+        include: {
+          participants: {
+            include: {
+              member: {
+                select: {
+                  id: true,
+                  name: true,
+                  phone: true,
+                },
+              },
+              hostMember: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+            orderBy: {
+              createdAt: "asc",
+            },
           },
         },
-      },
-      orderBy: [
-        { date: "desc" },
-        { startTime: "desc" },
-      ],
-    });
+      });
 
-    return NextResponse.json(sessions);
+      if (!session) {
+        return notFoundResponse("운동 일정을 찾을 수 없습니다.");
+      }
+
+      return NextResponse.json({
+        ...session,
+        registeredCount: session.participants.filter(
+          (participant) => participant.status === "REGISTERED"
+        ).length,
+        waitlistedCount: session.participants.filter(
+          (participant) => participant.status === "WAITLIST"
+        ).length,
+      });
+    }
+
+    return NextResponse.json(
+      await getSessionSummaries(admin.clubId)
+    );
   } catch (error) {
     console.error(error);
     return NextResponse.json(
@@ -90,17 +173,27 @@ export async function POST(req: Request) {
             : Number(capacity),
         clubId: admin.clubId,
       },
-      include: {
-        participants: {
-          include: {
-            member: true,
-            hostMember: true,
-          },
-        },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        location: true,
+        publicToken: true,
+        date: true,
+        startTime: true,
+        endTime: true,
+        capacity: true,
+        status: true,
+        createdAt: true,
       },
     });
 
-    return NextResponse.json(session);
+    return NextResponse.json({
+      ...session,
+      registeredCount: 0,
+      waitlistedCount: 0,
+      participants: [],
+    });
   } catch (error) {
     console.error(error);
     return NextResponse.json(
@@ -170,13 +263,18 @@ export async function PUT(req: Request) {
               : Number(capacity),
         status: status ?? existingSession.status,
       },
-      include: {
-        participants: {
-          include: {
-            member: true,
-            hostMember: true,
-          },
-        },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        location: true,
+        publicToken: true,
+        date: true,
+        startTime: true,
+        endTime: true,
+        capacity: true,
+        status: true,
+        createdAt: true,
       },
     });
 

@@ -63,13 +63,13 @@ export function toDateInputValue(
 }
 
 export function getRegisteredParticipants(session: ClubSession) {
-  return session.participants.filter(
+  return (session.participants ?? []).filter(
     (participant) => participant.status === "REGISTERED"
   );
 }
 
 export function getWaitlistedParticipants(session: ClubSession) {
-  return session.participants.filter(
+  return (session.participants ?? []).filter(
     (participant) => participant.status === "WAITLIST"
   );
 }
@@ -78,7 +78,7 @@ export function findParticipant(
   session: ClubSession,
   memberId: number
 ) {
-  return session.participants.find(
+  return (session.participants ?? []).find(
     (participant) => participant.memberId === memberId
   );
 }
