@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { nanoid } from "nanoid";
 import { AttendancePanel } from "@/components/dashboard/AttendancePanel";
@@ -94,9 +94,6 @@ async function requestJson<T>(
 
 export default function DashboardPage() {
   const router = useRouter();
-  const membersMutationCountRef = useRef(0);
-  const sessionsMutationCountRef = useRef(0);
-  const specialFeesMutationCountRef = useRef(0);
 
   const [clubInfo, setClubInfo] = useState<ClubInfo | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
@@ -199,208 +196,6 @@ export default function DashboardPage() {
     );
   }
 
-  function queueMembersRefresh() {
-    window.setTimeout(() => {
-      refreshMembers()
-        .catch(() => undefined)
-        .finally(() => {
-          membersMutationCountRef.current = Math.max(
-            0,
-            membersMutationCountRef.current - 1
-          );
-        });
-    }, 700);
-  }
-
-  function queueSessionsRefresh() {
-    window.setTimeout(() => {
-      refreshSessions()
-        .catch(() => undefined)
-        .finally(() => {
-          sessionsMutationCountRef.current = Math.max(
-            0,
-            sessionsMutationCountRef.current - 1
-          );
-        });
-    }, 700);
-  }
-
-  function queueSpecialFeesRefresh() {
-    window.setTimeout(() => {
-      refreshSpecialFees()
-        .catch(() => undefined)
-        .finally(() => {
-          specialFeesMutationCountRef.current = Math.max(
-            0,
-            specialFeesMutationCountRef.current - 1
-          );
-        });
-    }, 700);
-  }
-
-  function setMemberFeeLocally(
-    memberId: number,
-    year: number,
-    month: number,
-    paid: boolean
-  ) {
-    setMembers((current) =>
-      current.map((member) => {
-        if (member.id !== memberId) {
-          return member;
-        }
-
-        const existingFee = member.fees.find(
-          (fee) => fee.year === year && fee.month === month
-        );
-
-        const nextFees = existingFee
-          ? member.fees.map((fee) =>
-              fee.year === year && fee.month === month
-                ? { ...fee, paid }
-                : fee
-            )
-          : [
-              ...member.fees,
-              {
-                id: -(memberId * 10000 + year * 100 + month),
-                year,
-                month,
-                paid,
-              },
-            ];
-
-        return {
-          ...member,
-          fees: nextFees,
-        };
-      })
-    );
-  }
-
-  function setAllMemberFeesLocally(
-    memberId: number,
-    year: number,
-    paid: boolean
-  ) {
-    setMembers((current) =>
-      current.map((member) => {
-        if (member.id !== memberId) {
-          return member;
-        }
-
-        const nextFees = [...member.fees];
-
-        for (let month = 1; month <= 12; month += 1) {
-          const existingIndex = nextFees.findIndex(
-            (fee) => fee.year === year && fee.month === month
-          );
-
-          if (existingIndex >= 0) {
-            nextFees[existingIndex] = {
-              ...nextFees[existingIndex],
-              paid,
-            };
-          } else {
-            nextFees.push({
-              id: -(memberId * 10000 + year * 100 + month),
-              year,
-              month,
-              paid,
-            });
-          }
-        }
-
-        return {
-          ...member,
-          fees: nextFees,
-        };
-      })
-    );
-  }
-
-  function setSpecialFeePaymentLocally(
-    specialFeeId: number,
-    memberId: number,
-    paid: boolean
-  ) {
-    setSpecialFees((current) =>
-      current.map((specialFee) => {
-        if (specialFee.id !== specialFeeId) {
-          return specialFee;
-        }
-
-        const existingPayment = specialFee.payments.find(
-          (payment) => payment.memberId === memberId
-        );
-
-        if (existingPayment) {
-          return {
-            ...specialFee,
-            payments: specialFee.payments.map((payment) =>
-              payment.memberId === memberId
-                ? {
-                    ...payment,
-                    paid,
-                    paidAt: paid ? new Date().toISOString() : null,
-                  }
-                : payment
-            ),
-          };
-        }
-
-        const member = members.find(
-          (currentMember) => currentMember.id === memberId
-        );
-
-        if (!member) {
-          return specialFee;
-        }
-
-        return {
-          ...specialFee,
-          payments: [
-            ...specialFee.payments,
-            {
-              id: -(specialFeeId * 10000 + memberId),
-              paid,
-              paidAt: paid ? new Date().toISOString() : null,
-              note: "",
-              createdAt: new Date().toISOString(),
-              memberId,
-              specialFeeId,
-              member,
-            },
-          ],
-        };
-      })
-    );
-  }
-
-  function setAttendanceLocally(
-    participantId: number,
-    attendanceStatus: "PENDING" | "PRESENT" | "ABSENT" | "LATE"
-  ) {
-    setSessions((current) =>
-      current.map((session) => ({
-        ...session,
-        participants: session.participants.map((participant) =>
-          participant.id === participantId
-            ? {
-                ...participant,
-                attendanceStatus,
-                checkedInAt:
-                  attendanceStatus === "PRESENT" ||
-                  attendanceStatus === "LATE"
-                    ? new Date().toISOString()
-                    : null,
-              }
-            : participant
-        ),
-      }))
-    );
-  }
-
   async function performLogout() {
     try {
       await fetch("/api/admin/logout", {
@@ -437,10 +232,7 @@ export default function DashboardPage() {
   useEffect(() => {
     const refreshLiveData = () => {
       void refreshRequests().catch(() => undefined);
-
-      if (sessionsMutationCountRef.current === 0) {
-        void refreshSessions().catch(() => undefined);
-      }
+      void refreshSessions().catch(() => undefined);
     };
 
     const handleVisibilityChange = () => {
@@ -590,7 +382,7 @@ export default function DashboardPage() {
       return;
     }
 
-    const savedMember = await requestJson<Member>("/api/members", {
+    await requestJson<Member>("/api/members", {
       method: editingMember ? "PUT" : "POST",
       body: JSON.stringify(
         editingMember
@@ -599,32 +391,13 @@ export default function DashboardPage() {
       ),
     });
 
-    membersMutationCountRef.current += 1;
-
-    setMembers((current) => {
-      if (editingMember) {
-        return current.map((member) =>
-          member.id === savedMember.id
-            ? {
-                ...member,
-                ...savedMember,
-                fees: member.fees,
-              }
-            : member
-        );
-      }
-
-      return [{ ...savedMember, fees: [] }, ...current];
-    });
-
     setShowMemberModal(false);
     setEditingMember(null);
     setForm(initialForm);
-    queueMembersRefresh();
+    await refreshMembers();
 
     if (!editingMember) {
-      specialFeesMutationCountRef.current += 1;
-      queueSpecialFeesRefresh();
+      await refreshSpecialFees();
     }
   }
 
@@ -679,29 +452,17 @@ export default function DashboardPage() {
   ) {
     const nextPaid = !currentPaid;
 
-    membersMutationCountRef.current += 1;
-    setMemberFeeLocally(memberId, year, month, nextPaid);
+    await requestJson("/api/fees", {
+      method: "POST",
+      body: JSON.stringify({
+        memberId,
+        year,
+        month,
+        paid: nextPaid,
+      }),
+    });
 
-    try {
-      await requestJson("/api/fees", {
-        method: "POST",
-        body: JSON.stringify({
-          memberId,
-          year,
-          month,
-          paid: nextPaid,
-        }),
-      });
-
-      queueMembersRefresh();
-    } catch (error) {
-      membersMutationCountRef.current = Math.max(
-        0,
-        membersMutationCountRef.current - 1
-      );
-      setMemberFeeLocally(memberId, year, month, currentPaid);
-      throw error;
-    }
+    await refreshMembers();
   }
 
   async function handleAllPaid(memberId: number) {
@@ -709,33 +470,21 @@ export default function DashboardPage() {
       return;
     }
 
-    membersMutationCountRef.current += 1;
-    setAllMemberFeesLocally(memberId, selectedYear, true);
+    await Promise.all(
+      Array.from({ length: 12 }, (_, index) =>
+        requestJson("/api/fees", {
+          method: "POST",
+          body: JSON.stringify({
+            memberId,
+            year: selectedYear,
+            month: index + 1,
+            paid: true,
+          }),
+        })
+      )
+    );
 
-    try {
-      await Promise.all(
-        Array.from({ length: 12 }, (_, index) =>
-          requestJson("/api/fees", {
-            method: "POST",
-            body: JSON.stringify({
-              memberId,
-              year: selectedYear,
-              month: index + 1,
-              paid: true,
-            }),
-          })
-        )
-      );
-
-      queueMembersRefresh();
-    } catch (error) {
-      membersMutationCountRef.current = Math.max(
-        0,
-        membersMutationCountRef.current - 1
-      );
-      void refreshMembers().catch(() => undefined);
-      throw error;
-    }
+    await refreshMembers();
   }
 
   async function handleAllUnpaid(memberId: number) {
@@ -743,33 +492,21 @@ export default function DashboardPage() {
       return;
     }
 
-    membersMutationCountRef.current += 1;
-    setAllMemberFeesLocally(memberId, selectedYear, false);
+    await Promise.all(
+      Array.from({ length: 12 }, (_, index) =>
+        requestJson("/api/fees", {
+          method: "POST",
+          body: JSON.stringify({
+            memberId,
+            year: selectedYear,
+            month: index + 1,
+            paid: false,
+          }),
+        })
+      )
+    );
 
-    try {
-      await Promise.all(
-        Array.from({ length: 12 }, (_, index) =>
-          requestJson("/api/fees", {
-            method: "POST",
-            body: JSON.stringify({
-              memberId,
-              year: selectedYear,
-              month: index + 1,
-              paid: false,
-            }),
-          })
-        )
-      );
-
-      queueMembersRefresh();
-    } catch (error) {
-      membersMutationCountRef.current = Math.max(
-        0,
-        membersMutationCountRef.current - 1
-      );
-      void refreshMembers().catch(() => undefined);
-      throw error;
-    }
+    await refreshMembers();
   }
 
   async function handleApprove(id: number) {
@@ -908,28 +645,16 @@ export default function DashboardPage() {
       return;
     }
 
-    specialFeesMutationCountRef.current += 1;
-    setSpecialFeePaymentLocally(specialFeeId, memberId, nextPaid);
+    await requestJson("/api/special-fees/payment", {
+      method: "POST",
+      body: JSON.stringify({
+        specialFeeId,
+        memberId,
+        paid: nextPaid,
+      }),
+    });
 
-    try {
-      await requestJson("/api/special-fees/payment", {
-        method: "POST",
-        body: JSON.stringify({
-          specialFeeId,
-          memberId,
-          paid: nextPaid,
-        }),
-      });
-
-      queueSpecialFeesRefresh();
-    } catch (error) {
-      specialFeesMutationCountRef.current = Math.max(
-        0,
-        specialFeesMutationCountRef.current - 1
-      );
-      setSpecialFeePaymentLocally(specialFeeId, memberId, paid);
-      throw error;
-    }
+    await refreshSpecialFees();
   }
 
   async function handleUpdateSessionStatus(
@@ -952,27 +677,15 @@ export default function DashboardPage() {
       | "ABSENT"
       | "LATE"
   ) {
-    sessionsMutationCountRef.current += 1;
-    setAttendanceLocally(participantId, attendanceStatus);
+    await requestJson("/api/sessions/attendance", {
+      method: "POST",
+      body: JSON.stringify({
+        participantId,
+        attendanceStatus,
+      }),
+    });
 
-    try {
-      await requestJson("/api/sessions/attendance", {
-        method: "POST",
-        body: JSON.stringify({
-          participantId,
-          attendanceStatus,
-        }),
-      });
-
-      queueSessionsRefresh();
-    } catch (error) {
-      sessionsMutationCountRef.current = Math.max(
-        0,
-        sessionsMutationCountRef.current - 1
-      );
-      void refreshSessions().catch(() => undefined);
-      throw error;
-    }
+    await refreshSessions();
   }
 
   return (
