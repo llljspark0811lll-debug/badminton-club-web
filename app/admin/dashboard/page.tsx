@@ -211,29 +211,49 @@ export default function DashboardPage() {
       "/api/sessions"
     );
 
-    setSessions((current) =>
-      nextSessions.map((session) => {
-        const existing = current.find(
-          (item) => item.id === session.id
-        );
+    const nextSelectedSessionId =
+      nextSessions.length === 0
+        ? null
+        : nextSessions.some(
+              (session) => session.id === selectedSessionId
+            )
+          ? selectedSessionId
+          : nextSessions[0].id;
 
-        return existing?.participants
-          ? { ...session, participants: existing.participants }
-          : session;
-      })
-    );
-
-    setSelectedSessionId((current) => {
-      if (!nextSessions.length) {
-        return null;
-      }
-
-      const exists = nextSessions.some(
-        (session) => session.id === current
+    let mergedSessions = nextSessions.map((session) => {
+      const existing = sessions.find(
+        (item) => item.id === session.id
       );
 
-      return exists ? current : null;
+      return existing?.participants
+        ? { ...session, participants: existing.participants }
+        : session;
     });
+
+    if (nextSelectedSessionId) {
+      const selectedSummary = mergedSessions.find(
+        (session) => session.id === nextSelectedSessionId
+      );
+
+      if (selectedSummary && !selectedSummary.participants) {
+        try {
+          const detail = await requestJson<ClubSession>(
+            `/api/sessions?id=${nextSelectedSessionId}`
+          );
+
+          mergedSessions = mergedSessions.map((session) =>
+            session.id === nextSelectedSessionId
+              ? { ...session, ...detail }
+              : session
+          );
+        } catch {
+          // Ignore initial detail load failures on tab open.
+        }
+      }
+    }
+
+    setSessions(mergedSessions);
+    setSelectedSessionId(nextSelectedSessionId);
   }
 
   async function refreshSessionDetail(sessionId: number) {
@@ -266,29 +286,50 @@ export default function DashboardPage() {
 
     setSpecialFeesLoaded(true);
 
-    setSpecialFees((current) =>
-      nextSpecialFees.map((specialFee) => {
-        const existing = current.find(
-          (item) => item.id === specialFee.id
-        );
+    const nextSelectedSpecialFeeId =
+      nextSpecialFees.length === 0
+        ? null
+        : nextSpecialFees.some(
+              (specialFee) =>
+                specialFee.id === selectedSpecialFeeId
+            )
+          ? selectedSpecialFeeId
+          : nextSpecialFees[0].id;
 
-        return existing?.payments
-          ? { ...specialFee, payments: existing.payments }
-          : specialFee;
-      })
-    );
-
-    setSelectedSpecialFeeId((current) => {
-      if (!nextSpecialFees.length) {
-        return null;
-      }
-
-      const exists = nextSpecialFees.some(
-        (specialFee) => specialFee.id === current
+    let mergedSpecialFees = nextSpecialFees.map((specialFee) => {
+      const existing = specialFees.find(
+        (item) => item.id === specialFee.id
       );
 
-      return exists ? current : null;
+      return existing?.payments
+        ? { ...specialFee, payments: existing.payments }
+        : specialFee;
     });
+
+    if (nextSelectedSpecialFeeId) {
+      const selectedSummary = mergedSpecialFees.find(
+        (specialFee) => specialFee.id === nextSelectedSpecialFeeId
+      );
+
+      if (selectedSummary && !selectedSummary.payments) {
+        try {
+          const detail = await requestJson<SpecialFee>(
+            `/api/special-fees?id=${nextSelectedSpecialFeeId}`
+          );
+
+          mergedSpecialFees = mergedSpecialFees.map((specialFee) =>
+            specialFee.id === nextSelectedSpecialFeeId
+              ? { ...specialFee, ...detail }
+              : specialFee
+          );
+        } catch {
+          // Ignore initial detail load failures on tab open.
+        }
+      }
+    }
+
+    setSpecialFees(mergedSpecialFees);
+    setSelectedSpecialFeeId(nextSelectedSpecialFeeId);
   }
 
   async function refreshSpecialFeeDetail(
@@ -405,6 +446,34 @@ export default function DashboardPage() {
   }, [activeTab]);
 
   useEffect(() => {
+    if (activeTab !== "fees" || !selectedSpecialFeeId) {
+      return;
+    }
+
+    const selectedSpecialFee = specialFees.find(
+      (specialFee) => specialFee.id === selectedSpecialFeeId
+    );
+
+    if (!selectedSpecialFee) {
+      if (!specialFees.length) {
+        return;
+      }
+
+      setSelectedSpecialFeeId(specialFees[0].id);
+      return;
+    }
+
+    if (selectedSpecialFee.payments) {
+      return;
+    }
+
+    refreshSpecialFeeDetail(
+      selectedSpecialFeeId,
+      true
+    ).catch(() => undefined);
+  }, [activeTab, selectedSpecialFeeId, specialFees]);
+
+  useEffect(() => {
     if (
       (activeTab !== "sessions" &&
         activeTab !== "attendance") ||
@@ -418,7 +487,11 @@ export default function DashboardPage() {
     );
 
     if (!selectedSession) {
-      setSelectedSessionId(null);
+      if (!sessions.length) {
+        return;
+      }
+
+      setSelectedSessionId(sessions[0].id);
       return;
     }
 
@@ -436,19 +509,6 @@ export default function DashboardPage() {
       if (activeTab === "requests") {
         void refreshRequests().catch(() => undefined);
       }
-
-      if (
-        activeTab === "sessions" ||
-        activeTab === "attendance"
-      ) {
-        void refreshSessions().catch(() => undefined);
-
-        if (selectedSessionId) {
-          void refreshSessionDetail(selectedSessionId).catch(
-            () => undefined
-          );
-        }
-      }
     };
 
     const handleVisibilityChange = () => {
@@ -457,7 +517,10 @@ export default function DashboardPage() {
       }
     };
 
-    const interval = window.setInterval(refreshLiveData, 4000);
+    const interval =
+      activeTab === "requests"
+        ? window.setInterval(refreshLiveData, 4000)
+        : null;
 
     window.addEventListener("focus", refreshLiveData);
     document.addEventListener(
@@ -466,7 +529,9 @@ export default function DashboardPage() {
     );
 
     return () => {
-      window.clearInterval(interval);
+      if (interval) {
+        window.clearInterval(interval);
+      }
       window.removeEventListener("focus", refreshLiveData);
       document.removeEventListener(
         "visibilitychange",
@@ -854,9 +919,11 @@ export default function DashboardPage() {
       body: JSON.stringify(payload),
     });
 
-    await refreshSessions();
+    setSessions((current) => [
+      created,
+      ...current.filter((session) => session.id !== created.id),
+    ]);
     setSelectedSessionId(created.id);
-    await refreshSessionDetail(created.id);
   }
 
   async function handleSelectSession(sessionId: number) {
@@ -927,6 +994,29 @@ export default function DashboardPage() {
       ...current.filter((item) => item.id !== created.id),
     ]);
     setSelectedSpecialFeeId(created.id);
+  }
+
+  async function handleDeleteSpecialFee(specialFeeId: number) {
+    await requestJson("/api/special-fees", {
+      method: "DELETE",
+      body: JSON.stringify({ id: specialFeeId }),
+    });
+
+    setSpecialFees((current) => {
+      const nextSpecialFees = current.filter(
+        (specialFee) => specialFee.id !== specialFeeId
+      );
+
+      setSelectedSpecialFeeId((currentSelectedFeeId) => {
+        if (currentSelectedFeeId !== specialFeeId) {
+          return currentSelectedFeeId;
+        }
+
+        return nextSpecialFees[0]?.id ?? null;
+      });
+
+      return nextSpecialFees;
+    });
   }
 
   async function handleSelectSpecialFee(specialFeeId: number) {
@@ -1189,6 +1279,7 @@ export default function DashboardPage() {
               selectedFeeId={selectedSpecialFeeId}
               loadingSelectedFee={loadingSpecialFeeDetail}
               onSelectFee={handleSelectSpecialFee}
+              onDeleteFee={handleDeleteSpecialFee}
               onCreateFee={handleCreateSpecialFee}
               onTogglePayment={handleToggleSpecialFeePayment}
             />

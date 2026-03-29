@@ -14,9 +14,16 @@ export async function GET(req: Request) {
     }
 
     const { searchParams } = new URL(req.url);
-    const specialFeeId = Number(searchParams.get("id"));
+    const specialFeeIdParam = searchParams.get("id");
+    const specialFeeId = specialFeeIdParam
+      ? Number(specialFeeIdParam)
+      : null;
 
-    if (Number.isFinite(specialFeeId)) {
+    if (
+      specialFeeIdParam !== null &&
+      specialFeeId !== null &&
+      Number.isFinite(specialFeeId)
+    ) {
       const specialFee = await prisma.specialFee.findFirst({
         where: {
           id: specialFeeId,
@@ -181,6 +188,52 @@ export async function POST(req: Request) {
     console.error(error);
     return NextResponse.json(
       { error: "수시회비 생성에 실패했습니다." },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(req: Request) {
+  try {
+    const admin = await requireAuthAdmin();
+
+    if (!admin) {
+      return unauthorizedResponse();
+    }
+
+    const { id } = await req.json();
+    const specialFeeId = Number(id);
+
+    if (!Number.isFinite(specialFeeId)) {
+      return NextResponse.json(
+        { error: "삭제할 수시회비 항목을 확인해주세요." },
+        { status: 400 }
+      );
+    }
+
+    const existingSpecialFee = await prisma.specialFee.findFirst({
+      where: {
+        id: specialFeeId,
+        clubId: admin.clubId,
+      },
+    });
+
+    if (!existingSpecialFee) {
+      return NextResponse.json(
+        { error: "수시회비 항목을 찾을 수 없습니다." },
+        { status: 404 }
+      );
+    }
+
+    await prisma.specialFee.delete({
+      where: { id: existingSpecialFee.id },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json(
+      { error: "수시회비 삭제에 실패했습니다." },
       { status: 500 }
     );
   }

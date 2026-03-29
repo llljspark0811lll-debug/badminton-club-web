@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ClubSession } from "@/components/dashboard/types";
 import {
   formatDate,
@@ -79,9 +79,20 @@ export function SessionsPanel({
   const [form, setForm] = useState(initialForm);
   const [submitting, setSubmitting] = useState(false);
 
+  const hasSelectedSession = sessions.some(
+    (session) => session.id === selectedSessionId
+  );
+
   const selectedSession =
     sessions.find((session) => session.id === selectedSessionId) ??
+    sessions[0] ??
     null;
+
+  useEffect(() => {
+    if (!hasSelectedSession && sessions[0]) {
+      onSelectSession(sessions[0].id);
+    }
+  }, [hasSelectedSession, onSelectSession, sessions]);
 
   const publicSessionLink = useMemo(() => {
     if (!selectedSession) {

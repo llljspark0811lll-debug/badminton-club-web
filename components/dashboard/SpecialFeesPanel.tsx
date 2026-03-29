@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   Member,
   SpecialFee,
@@ -16,6 +16,7 @@ type SpecialFeesPanelProps = {
   selectedFeeId: number | null;
   loadingSelectedFee: boolean;
   onSelectFee: (specialFeeId: number) => void;
+  onDeleteFee: (specialFeeId: number) => Promise<void>;
   onCreateFee: (payload: {
     title: string;
     amount: string;
@@ -44,31 +45,52 @@ export function SpecialFeesPanel({
   selectedFeeId,
   loadingSelectedFee,
   onSelectFee,
+  onDeleteFee,
   onCreateFee,
   onTogglePayment,
 }: SpecialFeesPanelProps) {
   const [form, setForm] = useState(initialForm);
   const [creating, setCreating] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [quickFilter, setQuickFilter] =
     useState<SpecialFeeQuickFilter>("ALL");
 
+  const effectiveSelectedFeeId =
+    selectedFeeId ?? specialFees[0]?.id ?? null;
+
   const selectedFee =
-    specialFees.find((specialFee) => specialFee.id === selectedFeeId) ??
-    null;
+    specialFees.find(
+      (specialFee) => specialFee.id === effectiveSelectedFeeId
+    ) ?? null;
+
+  const displayFee = selectedFee ?? specialFees[0] ?? null;
+
+  const showSelectedFeeLoading =
+    loadingSelectedFee ||
+    Boolean(displayFee && !displayFee.payments);
+
+  useEffect(() => {
+    const hasSelectedFee = specialFees.some(
+      (specialFee) => specialFee.id === selectedFeeId
+    );
+
+    if (!hasSelectedFee && specialFees[0]) {
+      onSelectFee(specialFees[0].id);
+    }
+  }, [onSelectFee, selectedFeeId, specialFees]);
 
   const selectedPayments = useMemo(() => {
-    if (!selectedFee?.payments) {
+    if (!displayFee?.payments) {
       return [];
     }
 
     const allRows = members.map((member) => {
-      const payment = selectedFee.payments?.find(
+      const payment = displayFee.payments?.find(
         (item) => item.memberId === member.id
       );
 
       return {
         member,
-        payment,
         paid: payment?.paid ?? false,
       };
     });
@@ -78,7 +100,7 @@ export function SpecialFeesPanel({
     }
 
     return allRows;
-  }, [members, quickFilter, selectedFee]);
+  }, [displayFee, members, quickFilter]);
 
   async function handleCreate() {
     setCreating(true);
@@ -94,6 +116,30 @@ export function SpecialFeesPanel({
       alert(message);
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!displayFee) {
+      return;
+    }
+
+    if (!confirm("정말 이 수시회비 항목을 삭제하시겠습니까?")) {
+      return;
+    }
+
+    setDeleting(true);
+
+    try {
+      await onDeleteFee(displayFee.id);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "수시회비 삭제에 실패했습니다.";
+      alert(message);
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -176,7 +222,7 @@ export function SpecialFeesPanel({
                 key={specialFee.id}
                 onClick={() => onSelectFee(specialFee.id)}
                 className={`w-full rounded-2xl border p-4 text-left transition ${
-                  selectedFeeId === specialFee.id
+                  effectiveSelectedFeeId === specialFee.id
                     ? "border-slate-900 bg-slate-900 text-white"
                     : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
                 }`}
@@ -191,7 +237,7 @@ export function SpecialFeesPanel({
                     </p>
                   </div>
                   <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold">
-                    {specialFee.paidCount ?? 0}/{members.length} 납부
+                    {specialFee.paidCount ?? 0}/{members.length}명 납부
                   </span>
                 </div>
               </button>
@@ -207,23 +253,23 @@ export function SpecialFeesPanel({
       </div>
 
       <section className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
-        {selectedFee ? (
+        {displayFee ? (
           <>
             <div className="border-b border-slate-200 pb-5">
               <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                 <div>
                   <h3 className="text-2xl font-black text-slate-900">
-                    {selectedFee.title}
+                    {displayFee.title}
                   </h3>
                   <p className="mt-2 text-sm text-slate-500">
-                    금액 {selectedFee.amount.toLocaleString()}원
-                    {selectedFee.dueDate
-                      ? ` · 납부기한 ${formatDate(selectedFee.dueDate)}`
+                    금액 {displayFee.amount.toLocaleString()}원
+                    {displayFee.dueDate
+                      ? ` · 납부기한 ${formatDate(displayFee.dueDate)}`
                       : ""}
                   </p>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <button
                     onClick={() => setQuickFilter("ALL")}
                     className={`rounded-xl px-3 py-2 text-xs font-bold transition ${
@@ -244,15 +290,24 @@ export function SpecialFeesPanel({
                   >
                     미납 회원만
                   </button>
+                  <button
+                    onClick={() => {
+                      handleDelete().catch(() => undefined);
+                    }}
+                    disabled={deleting}
+                    className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-300"
+                  >
+                    {deleting ? "삭제 중..." : "삭제"}
+                  </button>
                 </div>
               </div>
 
               <p className="mt-3 text-sm leading-6 text-slate-500">
-                {selectedFee.description || "설명 없음"}
+                {displayFee.description || "설명 없음"}
               </p>
             </div>
 
-            {loadingSelectedFee ? (
+            {showSelectedFeeLoading ? (
               <div className="mt-5 rounded-[1.5rem] bg-slate-50 px-4 py-12 text-center text-sm text-slate-400">
                 수시회비 상세 정보를 불러오는 중입니다.
               </div>
@@ -292,7 +347,7 @@ export function SpecialFeesPanel({
                             <button
                               onClick={() =>
                                 onTogglePayment(
-                                  selectedFee.id,
+                                  displayFee.id,
                                   member.id,
                                   paid
                                 ).catch((error: Error) => {

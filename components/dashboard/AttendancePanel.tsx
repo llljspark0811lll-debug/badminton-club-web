@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import type { ClubSession } from "@/components/dashboard/types";
 import {
   formatDate,
@@ -31,9 +32,20 @@ export function AttendancePanel({
   onSelectSession,
   onUpdateAttendance,
 }: AttendancePanelProps) {
+  const hasSelectedSession = sessions.some(
+    (session) => session.id === selectedSessionId
+  );
+
   const selectedSession =
     sessions.find((session) => session.id === selectedSessionId) ??
+    sessions[0] ??
     null;
+
+  useEffect(() => {
+    if (!hasSelectedSession && sessions[0]) {
+      onSelectSession(sessions[0].id);
+    }
+  }, [hasSelectedSession, onSelectSession, sessions]);
 
   const participants =
     selectedSession?.participants?.filter(

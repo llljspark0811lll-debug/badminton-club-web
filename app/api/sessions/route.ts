@@ -67,9 +67,16 @@ export async function GET(req: Request) {
     }
 
     const { searchParams } = new URL(req.url);
-    const sessionId = Number(searchParams.get("id"));
+    const sessionIdParam = searchParams.get("id");
+    const sessionId = sessionIdParam
+      ? Number(sessionIdParam)
+      : null;
 
-    if (Number.isFinite(sessionId)) {
+    if (
+      sessionIdParam !== null &&
+      sessionId !== null &&
+      Number.isFinite(sessionId)
+    ) {
       const session = await prisma.clubSession.findFirst({
         where: {
           id: sessionId,
