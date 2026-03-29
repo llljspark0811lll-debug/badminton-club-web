@@ -28,7 +28,21 @@ export async function GET() {
 
     const members = await prisma.member.findMany({
       where: { clubId: admin.clubId },
-      include: { fees: true },
+      select: {
+        id: true,
+        name: true,
+        gender: true,
+        birth: true,
+        phone: true,
+        level: true,
+        customFieldValue: true,
+        note: true,
+        status: true,
+        createdAt: true,
+        deleted: true,
+        deletedAt: true,
+        withdrawnAt: true,
+      },
       orderBy: { createdAt: "desc" },
     });
 

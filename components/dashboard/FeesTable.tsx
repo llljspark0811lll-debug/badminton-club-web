@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
-import type { Member } from "@/components/dashboard/types";
+import type { Fee, Member } from "@/components/dashboard/types";
 
 type FeesTableProps = {
   members: Member[];
+  fees: Fee[];
   selectedYear: number;
   onChangeYear: (year: number) => void;
   onToggleFee: (
@@ -32,6 +33,7 @@ function getYearOptions(selectedYear: number) {
 
 export function FeesTable({
   members,
+  fees,
   selectedYear,
   onChangeYear,
   onToggleFee,
@@ -46,6 +48,23 @@ export function FeesTable({
     [selectedYear]
   );
 
+  const feeMap = useMemo(() => {
+    const nextMap = new Map<string, Fee>();
+
+    for (const fee of fees) {
+      if (fee.memberId === undefined) {
+        continue;
+      }
+
+      nextMap.set(
+        `${fee.memberId}-${fee.year}-${fee.month}`,
+        fee
+      );
+    }
+
+    return nextMap;
+  }, [fees]);
+
   const filteredMembers = useMemo(() => {
     if (quickFilter === "ALL") {
       return members;
@@ -55,14 +74,13 @@ export function FeesTable({
       const paidMonths = Array.from(
         { length: 12 },
         (_, index) => index + 1
-      ).filter((month) =>
-        member.fees.some(
-          (fee) =>
-            fee.year === selectedYear &&
-            fee.month === month &&
-            fee.paid
-        )
-      ).length;
+      ).filter((month) => {
+        const fee = feeMap.get(
+          `${member.id}-${selectedYear}-${month}`
+        );
+
+        return Boolean(fee?.paid);
+      }).length;
 
       if (quickFilter === "UNPAID") {
         return paidMonths < 12;
@@ -70,7 +88,7 @@ export function FeesTable({
 
       return paidMonths === 12;
     });
-  }, [members, quickFilter, selectedYear]);
+  }, [feeMap, members, quickFilter, selectedYear]);
 
   return (
     <div className="space-y-4">
@@ -159,12 +177,10 @@ export function FeesTable({
                   </td>
                   {Array.from({ length: 12 }, (_, index) => {
                     const month = index + 1;
-                    const fee = member.fees.find(
-                      (item) =>
-                        item.year === selectedYear &&
-                        item.month === month
+                    const matchedFee = feeMap.get(
+                      `${member.id}-${selectedYear}-${month}`
                     );
-                    const isPaid = Boolean(fee?.paid);
+                    const isPaid = Boolean(matchedFee?.paid);
 
                     return (
                       <td

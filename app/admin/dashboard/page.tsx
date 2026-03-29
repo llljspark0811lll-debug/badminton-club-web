@@ -19,6 +19,7 @@ import type {
   ClubInfo,
   ClubSession,
   DashboardTab,
+  Fee,
   Member,
   MemberFormState,
   MemberRequest,
@@ -100,6 +101,7 @@ export default function DashboardPage() {
   const [requests, setRequests] = useState<MemberRequest[]>([]);
   const [sessions, setSessions] = useState<ClubSession[]>([]);
   const [specialFees, setSpecialFees] = useState<SpecialFee[]>([]);
+  const [fees, setFees] = useState<Fee[]>([]);
   const [activeTab, setActiveTab] =
     useState<DashboardTab>("members");
   const [selectedYear, setSelectedYear] = useState(
@@ -196,6 +198,12 @@ export default function DashboardPage() {
     );
   }
 
+  async function refreshFees(year = selectedYear) {
+    setFees(
+      await requestJson<Fee[]>(`/api/fees?year=${year}`)
+    );
+  }
+
   async function performLogout() {
     try {
       await fetch("/api/admin/logout", {
@@ -228,6 +236,16 @@ export default function DashboardPage() {
       setSelectedSessionId(sessions[0].id);
     }
   }, [selectedSessionId, sessions]);
+
+  useEffect(() => {
+    if (activeTab !== "fees") {
+      return;
+    }
+
+    refreshFees(selectedYear).catch((error: Error) => {
+      alert(error.message);
+    });
+  }, [activeTab, selectedYear]);
 
   useEffect(() => {
     const refreshLiveData = () => {
@@ -462,7 +480,7 @@ export default function DashboardPage() {
       }),
     });
 
-    await refreshMembers();
+    await refreshFees();
   }
 
   async function handleAllPaid(memberId: number) {
@@ -484,7 +502,7 @@ export default function DashboardPage() {
       )
     );
 
-    await refreshMembers();
+    await refreshFees();
   }
 
   async function handleAllUnpaid(memberId: number) {
@@ -506,7 +524,7 @@ export default function DashboardPage() {
       )
     );
 
-    await refreshMembers();
+    await refreshFees();
   }
 
   async function handleApprove(id: number) {
@@ -791,6 +809,7 @@ export default function DashboardPage() {
           <div className="space-y-6">
             <FeesTable
               members={activeMembers}
+              fees={fees}
               selectedYear={selectedYear}
               onChangeYear={setSelectedYear}
               onToggleFee={(memberId, year, month, currentPaid) => {

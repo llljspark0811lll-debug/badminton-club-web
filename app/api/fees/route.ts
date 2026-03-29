@@ -6,6 +6,51 @@ import {
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
+export async function GET(req: Request) {
+  try {
+    const admin = await requireAuthAdmin();
+
+    if (!admin) {
+      return unauthorizedResponse();
+    }
+
+    const { searchParams } = new URL(req.url);
+    const yearParam = Number(searchParams.get("year"));
+
+    if (!Number.isFinite(yearParam)) {
+      return NextResponse.json(
+        { error: "?곕룄瑜? ?뺤긽?곸쑝濡? ?낅젰?댁＜?몄슂." },
+        { status: 400 }
+      );
+    }
+
+    const fees = await prisma.fee.findMany({
+      where: {
+        year: yearParam,
+        member: {
+          clubId: admin.clubId,
+          deleted: false,
+        },
+      },
+      select: {
+        id: true,
+        memberId: true,
+        year: true,
+        month: true,
+        paid: true,
+      },
+    });
+
+    return NextResponse.json(fees);
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json(
+      { error: "?뚮퉬 紐⑸줉?? 遺덈윭?ㅼ? 紐삵뻽?듬땲??" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const admin = await requireAuthAdmin();

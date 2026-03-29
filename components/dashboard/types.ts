@@ -8,6 +8,7 @@ export type DashboardTab =
 
 export interface Fee {
   id: number;
+  memberId?: number;
   year: number;
   month: number;
   paid: boolean;
@@ -25,7 +26,7 @@ export interface Member {
   note: string;
   customFieldValue: string;
   deleted?: boolean;
-  fees: Fee[];
+  fees?: Fee[];
 }
 
 export interface MemberRequest {
