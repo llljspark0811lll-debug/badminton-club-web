@@ -130,6 +130,10 @@ export default function DashboardPage() {
     useState(false);
   const [loadingSessionDetail, setLoadingSessionDetail] =
     useState(false);
+  const [membersLoaded, setMembersLoaded] = useState(false);
+  const [requestsLoaded, setRequestsLoaded] = useState(false);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+  const [loadingRequests, setLoadingRequests] = useState(false);
 
   const paymentMode = getPaymentMode();
   const subscriptionAmount = getSubscriptionAmount();
@@ -160,32 +164,36 @@ export default function DashboardPage() {
     clubInfo?.calculatedStatus === "EXPIRED" ||
     clubInfo?.calculatedStatus === "BLOCKED";
 
-  async function loadDashboardData() {
-    const [
-      nextClubInfo,
-      nextMembers,
-      nextRequests,
-    ] = await Promise.all([
-      requestJson<ClubInfo>("/api/club-info"),
-      requestJson<Member[]>("/api/members"),
-      requestJson<MemberRequest[]>("/api/member-request"),
-    ]);
+  async function refreshClubInfo() {
+    const nextClubInfo = await requestJson<ClubInfo>("/api/club-info");
 
     setClubInfo(nextClubInfo);
     setCustomFieldLabelDraft(nextClubInfo.customFieldLabel);
     setAdminEmailDraft(nextClubInfo.adminEmail);
-    setMembers(nextMembers);
-    setRequests(nextRequests);
   }
 
   async function refreshMembers() {
-    setMembers(await requestJson<Member[]>("/api/members"));
+    setLoadingMembers(true);
+
+    try {
+      setMembers(await requestJson<Member[]>("/api/members"));
+      setMembersLoaded(true);
+    } finally {
+      setLoadingMembers(false);
+    }
   }
 
   async function refreshRequests() {
-    setRequests(
-      await requestJson<MemberRequest[]>("/api/member-request")
-    );
+    setLoadingRequests(true);
+
+    try {
+      setRequests(
+        await requestJson<MemberRequest[]>("/api/member-request")
+      );
+      setRequestsLoaded(true);
+    } finally {
+      setLoadingRequests(false);
+    }
   }
 
   async function refreshSessions() {
@@ -314,22 +322,43 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
-    loadDashboardData().catch((error: Error) => {
+    refreshClubInfo().catch((error: Error) => {
       alert(error.message);
       router.push("/admin/login");
     });
   }, [router]);
 
   useEffect(() => {
+    if (
+      (activeTab === "members" ||
+        activeTab === "deleted" ||
+        activeTab === "fees") &&
+      !membersLoaded
+    ) {
+      refreshMembers().catch((error: Error) => {
+        alert(error.message);
+      });
+    }
+
+    if (activeTab === "requests" && !requestsLoaded) {
+      refreshRequests().catch((error: Error) => {
+        alert(error.message);
+      });
+    }
+  }, [activeTab, membersLoaded, requestsLoaded]);
+
+  useEffect(() => {
     if (activeTab !== "fees") {
       return;
     }
 
-    Promise.all([refreshFees(selectedYear), refreshSpecialFees()]).catch(
-      (error: Error) => {
-        alert(error.message);
-      }
-    );
+    Promise.all([
+      membersLoaded ? Promise.resolve() : refreshMembers(),
+      refreshFees(selectedYear),
+      refreshSpecialFees(),
+    ]).catch((error: Error) => {
+      alert(error.message);
+    });
   }, [activeTab, selectedYear]);
 
   useEffect(() => {
@@ -391,7 +420,11 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const refreshLiveData = () => {
-      void refreshRequests().catch(() => undefined);
+      void refreshClubInfo().catch(() => undefined);
+
+      if (activeTab === "requests") {
+        void refreshRequests().catch(() => undefined);
+      }
 
       if (
         activeTab === "sessions" ||
@@ -707,16 +740,30 @@ export default function DashboardPage() {
       setRequests((current) =>
         current.filter((request) => request.id !== result.requestId)
       );
+      setClubInfo((current) =>
+        current
+          ? {
+              ...current,
+              pendingRequestCount: Math.max(
+                0,
+                current.pendingRequestCount - 1
+              ),
+            }
+          : current
+      );
       setMembers((current) => {
         const withoutDuplicate = current.filter(
           (member) => member.id !== result.member.id
         );
 
-        return [...withoutDuplicate, { ...result.member, fees: [] }];
+      return [...withoutDuplicate, { ...result.member, fees: [] }];
       });
+      setMembersLoaded(true);
       setActiveTab("members");
 
-      void refreshRequests().catch(() => undefined);
+      if (requestsLoaded) {
+        void refreshRequests().catch(() => undefined);
+      }
       void refreshMembers().catch(() => undefined);
       if (activeTab === "fees") {
         void refreshSpecialFees().catch(() => undefined);
@@ -744,6 +791,18 @@ export default function DashboardPage() {
       method: "POST",
       body: JSON.stringify({ id }),
     });
+
+    setClubInfo((current) =>
+      current
+        ? {
+            ...current,
+            pendingRequestCount: Math.max(
+              0,
+              current.pendingRequestCount - 1
+            ),
+          }
+        : current
+    );
 
     await refreshRequests();
   }
@@ -878,6 +937,14 @@ export default function DashboardPage() {
     }
   }
 
+  function renderLoadingCard(message: string) {
+    return (
+      <div className="rounded-[1.5rem] border border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-400 shadow-sm">
+        {message}
+      </div>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,#f8fbff_0%,#eef5ff_45%,#ffffff_100%)] px-4 py-6 md:px-6">
       <SubscriptionOverlay
@@ -912,7 +979,9 @@ export default function DashboardPage() {
           <div className="mt-6">
             <DashboardTabs
               activeTab={activeTab}
-              requestsCount={requests.length}
+              requestsCount={
+                clubInfo?.pendingRequestCount ?? requests.length
+              }
               onChange={setActiveTab}
             />
           </div>

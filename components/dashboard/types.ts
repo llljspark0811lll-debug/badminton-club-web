@@ -102,6 +102,7 @@ export interface ClubInfo {
   subscriptionEnd?: string | Date | null;
   customFieldLabel: string;
   adminEmail: string;
+  pendingRequestCount: number;
 }
 
 export interface MemberFormState {

@@ -11,30 +11,37 @@ export async function GET() {
       return unauthorizedResponse();
     }
 
-    const [club, currentAdmin] = await Promise.all([
-      prisma.club.findUnique({
-        where: { id: admin.clubId },
-        select: {
-          id: true,
-          name: true,
-          publicJoinToken: true,
-          createdAt: true,
-          subscriptionStatus: true,
-          subscriptionEnd: true,
-        },
-      }),
-      prisma.admin.findUnique({
-        where: { id: admin.adminId },
-        select: {
-          customFieldLabel: true,
-          email: true,
-        },
-      }),
-    ]);
+    const [club, currentAdmin, pendingRequestCount] =
+      await Promise.all([
+        prisma.club.findUnique({
+          where: { id: admin.clubId },
+          select: {
+            id: true,
+            name: true,
+            publicJoinToken: true,
+            createdAt: true,
+            subscriptionStatus: true,
+            subscriptionEnd: true,
+          },
+        }),
+        prisma.admin.findUnique({
+          where: { id: admin.adminId },
+          select: {
+            customFieldLabel: true,
+            email: true,
+          },
+        }),
+        prisma.memberRequest.count({
+          where: {
+            clubId: admin.clubId,
+            status: "PENDING",
+          },
+        }),
+      ]);
 
     if (!club) {
       return NextResponse.json(
-        { error: "클럽을 찾을 수 없습니다." },
+        { error: "클럽 정보를 찾을 수 없습니다." },
         { status: 404 }
       );
     }
@@ -54,6 +61,7 @@ export async function GET() {
       customFieldLabel:
         currentAdmin?.customFieldLabel ?? "차량번호",
       adminEmail: currentAdmin?.email ?? "",
+      pendingRequestCount,
     });
   } catch (error) {
     console.error(error);
