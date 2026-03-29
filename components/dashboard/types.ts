@@ -49,7 +49,7 @@ export interface SpecialFeePayment {
   createdAt: string | Date;
   memberId: number;
   specialFeeId: number;
-  member: Member;
+  member: Pick<Member, "id" | "name" | "phone">;
 }
 
 export interface SpecialFee {
@@ -59,7 +59,8 @@ export interface SpecialFee {
   description: string;
   dueDate: string | Date | null;
   createdAt: string | Date;
-  payments: SpecialFeePayment[];
+  paidCount?: number;
+  payments?: SpecialFeePayment[];
 }
 
 export interface SessionParticipant {

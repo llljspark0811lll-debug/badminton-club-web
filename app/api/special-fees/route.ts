@@ -5,7 +5,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const admin = await requireAuthAdmin();
 
@@ -13,24 +13,89 @@ export async function GET() {
       return unauthorizedResponse();
     }
 
-    const specialFees = await prisma.specialFee.findMany({
-      where: { clubId: admin.clubId },
-      include: {
-        payments: {
-          include: {
-            member: true,
-          },
-          orderBy: {
-            createdAt: "asc",
+    const { searchParams } = new URL(req.url);
+    const specialFeeId = Number(searchParams.get("id"));
+
+    if (Number.isFinite(specialFeeId)) {
+      const specialFee = await prisma.specialFee.findFirst({
+        where: {
+          id: specialFeeId,
+          clubId: admin.clubId,
+        },
+        include: {
+          payments: {
+            include: {
+              member: {
+                select: {
+                  id: true,
+                  name: true,
+                  phone: true,
+                },
+              },
+            },
+            orderBy: {
+              createdAt: "asc",
+            },
           },
         },
+      });
+
+      if (!specialFee) {
+        return NextResponse.json(
+          { error: "수시회비 항목을 찾을 수 없습니다." },
+          { status: 404 }
+        );
+      }
+
+      return NextResponse.json({
+        ...specialFee,
+        paidCount: specialFee.payments.filter(
+          (payment) => payment.paid
+        ).length,
+      });
+    }
+
+    const specialFees = await prisma.specialFee.findMany({
+      where: { clubId: admin.clubId },
+      select: {
+        id: true,
+        title: true,
+        amount: true,
+        description: true,
+        dueDate: true,
+        createdAt: true,
       },
       orderBy: {
         createdAt: "desc",
       },
     });
 
-    return NextResponse.json(specialFees);
+    const paidCounts =
+      specialFees.length === 0
+        ? []
+        : await prisma.specialFeePayment.groupBy({
+            by: ["specialFeeId"],
+            where: {
+              paid: true,
+              specialFeeId: {
+                in: specialFees.map((specialFee) => specialFee.id),
+              },
+            },
+            _count: {
+              _all: true,
+            },
+          });
+
+    const paidCountMap = new Map(
+      paidCounts.map((row) => [row.specialFeeId, row._count._all])
+    );
+
+    return NextResponse.json(
+      specialFees.map((specialFee) => ({
+        ...specialFee,
+        paidCount: paidCountMap.get(specialFee.id) ?? 0,
+      }))
+    );
   } catch (error) {
     console.error(error);
     return NextResponse.json(
@@ -87,22 +152,14 @@ export async function POST(req: Request) {
         });
       }
 
-      return await tx.specialFee.findUniqueOrThrow({
-        where: { id: specialFee.id },
-        include: {
-          payments: {
-            include: {
-              member: true,
-            },
-            orderBy: {
-              createdAt: "asc",
-            },
-          },
-        },
-      });
+      return specialFee;
     });
 
-    return NextResponse.json(created);
+    return NextResponse.json({
+      ...created,
+      paidCount: 0,
+      payments: [],
+    });
   } catch (error) {
     console.error(error);
     return NextResponse.json(

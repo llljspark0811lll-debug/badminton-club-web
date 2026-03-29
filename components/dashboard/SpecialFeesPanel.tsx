@@ -1,15 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type {
   Member,
   SpecialFee,
 } from "@/components/dashboard/types";
-import { formatDate, formatPhoneNumber } from "@/components/dashboard/utils";
+import {
+  formatDate,
+  formatPhoneNumber,
+} from "@/components/dashboard/utils";
 
 type SpecialFeesPanelProps = {
   members: Member[];
   specialFees: SpecialFee[];
+  selectedFeeId: number | null;
+  loadingSelectedFee: boolean;
+  onSelectFee: (specialFeeId: number) => void;
   onCreateFee: (payload: {
     title: string;
     amount: string;
@@ -35,41 +41,28 @@ const initialForm = {
 export function SpecialFeesPanel({
   members,
   specialFees,
+  selectedFeeId,
+  loadingSelectedFee,
+  onSelectFee,
   onCreateFee,
   onTogglePayment,
 }: SpecialFeesPanelProps) {
   const [form, setForm] = useState(initialForm);
-  const [selectedFeeId, setSelectedFeeId] = useState<number | null>(
-    specialFees[0]?.id ?? null
-  );
   const [creating, setCreating] = useState(false);
   const [quickFilter, setQuickFilter] =
     useState<SpecialFeeQuickFilter>("ALL");
-
-  useEffect(() => {
-    if (!specialFees.length) {
-      setSelectedFeeId(null);
-      return;
-    }
-
-    const exists = specialFees.some(
-      (specialFee) => specialFee.id === selectedFeeId
-    );
-
-    if (!exists) {
-      setSelectedFeeId(specialFees[0].id);
-    }
-  }, [selectedFeeId, specialFees]);
 
   const selectedFee =
     specialFees.find((specialFee) => specialFee.id === selectedFeeId) ??
     null;
 
   const selectedPayments = useMemo(() => {
-    if (!selectedFee) return [];
+    if (!selectedFee?.payments) {
+      return [];
+    }
 
     const allRows = members.map((member) => {
-      const payment = selectedFee.payments.find(
+      const payment = selectedFee.payments?.find(
         (item) => item.memberId === member.id
       );
 
@@ -89,6 +82,7 @@ export function SpecialFeesPanel({
 
   async function handleCreate() {
     setCreating(true);
+
     try {
       await onCreateFee(form);
       setForm(initialForm);
@@ -111,8 +105,8 @@ export function SpecialFeesPanel({
             수시회비 항목 만들기
           </h3>
           <p className="mt-2 text-sm leading-6 text-slate-500">
-            대회 참가비, 단체복비, 코트 추가비처럼 일시적인 회비 항목을
-            만들고 관리할 수 있어요.
+            대회 참가비, 단체복비, 코트 추가비처럼 일시적인
+            회비 항목을 만들고 관리할 수 있어요.
           </p>
 
           <div className="mt-5 space-y-3">
@@ -177,37 +171,31 @@ export function SpecialFeesPanel({
             수시회비 목록
           </h3>
           <div className="mt-4 space-y-3">
-            {specialFees.map((specialFee) => {
-              const paidCount = specialFee.payments.filter(
-                (payment) => payment.paid
-              ).length;
-
-              return (
-                <button
-                  key={specialFee.id}
-                  onClick={() => setSelectedFeeId(specialFee.id)}
-                  className={`w-full rounded-2xl border p-4 text-left transition ${
-                    selectedFeeId === specialFee.id
-                      ? "border-slate-900 bg-slate-900 text-white"
-                      : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-base font-bold">
-                        {specialFee.title}
-                      </p>
-                      <p className="mt-2 text-sm opacity-80">
-                        {specialFee.amount.toLocaleString()}원
-                      </p>
-                    </div>
-                    <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold">
-                      {paidCount}/{members.length} 납부
-                    </span>
+            {specialFees.map((specialFee) => (
+              <button
+                key={specialFee.id}
+                onClick={() => onSelectFee(specialFee.id)}
+                className={`w-full rounded-2xl border p-4 text-left transition ${
+                  selectedFeeId === specialFee.id
+                    ? "border-slate-900 bg-slate-900 text-white"
+                    : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-base font-bold">
+                      {specialFee.title}
+                    </p>
+                    <p className="mt-2 text-sm opacity-80">
+                      {specialFee.amount.toLocaleString()}원
+                    </p>
                   </div>
-                </button>
-              );
-            })}
+                  <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold">
+                    {specialFee.paidCount ?? 0}/{members.length} 납부
+                  </span>
+                </div>
+              </button>
+            ))}
 
             {specialFees.length === 0 ? (
               <p className="rounded-2xl bg-slate-50 px-4 py-6 text-center text-sm text-slate-400">
@@ -264,74 +252,80 @@ export function SpecialFeesPanel({
               </p>
             </div>
 
-            <div className="mt-5 overflow-hidden rounded-[1.5rem] border border-slate-200">
-              <div className="overflow-x-auto">
-                <table className="min-w-[760px] w-full text-sm">
-                  <thead className="bg-slate-50 text-left text-slate-500">
-                    <tr>
-                      <th className="px-4 py-4 font-semibold">회원</th>
-                      <th className="px-4 py-4 font-semibold">연락처</th>
-                      <th className="px-4 py-4 font-semibold">납부 상태</th>
-                      <th className="px-4 py-4 font-semibold">관리</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {selectedPayments.map(({ member, paid }) => (
-                      <tr key={member.id} className="hover:bg-slate-50">
-                        <td className="px-4 py-4 font-bold text-slate-900">
-                          {member.name}
-                        </td>
-                        <td className="px-4 py-4 text-slate-500">
-                          {formatPhoneNumber(member.phone) || "-"}
-                        </td>
-                        <td className="px-4 py-4">
-                          <span
-                            className={`rounded-full px-3 py-1 text-xs font-bold ${
-                              paid
-                                ? "bg-emerald-100 text-emerald-700"
-                                : "bg-slate-100 text-slate-500"
-                            }`}
-                          >
-                            {paid ? "납부 완료" : "미납"}
-                          </span>
-                        </td>
-                        <td className="px-4 py-4">
-                          <button
-                            onClick={() =>
-                              onTogglePayment(
-                                selectedFee.id,
-                                member.id,
-                                paid
-                              ).catch((error: Error) => {
-                                alert(error.message);
-                              })
-                            }
-                            className={`rounded-xl px-3 py-2 text-xs font-bold transition ${
-                              paid
-                                ? "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                                : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                            }`}
-                          >
-                            {paid ? "미납으로 변경" : "납부 처리"}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-
-                    {selectedPayments.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={4}
-                          className="px-4 py-12 text-center text-sm text-slate-400"
-                        >
-                          조건에 맞는 회원이 없습니다.
-                        </td>
-                      </tr>
-                    ) : null}
-                  </tbody>
-                </table>
+            {loadingSelectedFee ? (
+              <div className="mt-5 rounded-[1.5rem] bg-slate-50 px-4 py-12 text-center text-sm text-slate-400">
+                수시회비 상세 정보를 불러오는 중입니다.
               </div>
-            </div>
+            ) : (
+              <div className="mt-5 overflow-hidden rounded-[1.5rem] border border-slate-200">
+                <div className="overflow-x-auto">
+                  <table className="min-w-[760px] w-full text-sm">
+                    <thead className="bg-slate-50 text-left text-slate-500">
+                      <tr>
+                        <th className="px-4 py-4 font-semibold">회원</th>
+                        <th className="px-4 py-4 font-semibold">연락처</th>
+                        <th className="px-4 py-4 font-semibold">납부 상태</th>
+                        <th className="px-4 py-4 font-semibold">관리</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {selectedPayments.map(({ member, paid }) => (
+                        <tr key={member.id} className="hover:bg-slate-50">
+                          <td className="px-4 py-4 font-bold text-slate-900">
+                            {member.name}
+                          </td>
+                          <td className="px-4 py-4 text-slate-500">
+                            {formatPhoneNumber(member.phone) || "-"}
+                          </td>
+                          <td className="px-4 py-4">
+                            <span
+                              className={`rounded-full px-3 py-1 text-xs font-bold ${
+                                paid
+                                  ? "bg-emerald-100 text-emerald-700"
+                                  : "bg-slate-100 text-slate-500"
+                              }`}
+                            >
+                              {paid ? "납부 완료" : "미납"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4">
+                            <button
+                              onClick={() =>
+                                onTogglePayment(
+                                  selectedFee.id,
+                                  member.id,
+                                  paid
+                                ).catch((error: Error) => {
+                                  alert(error.message);
+                                })
+                              }
+                              className={`rounded-xl px-3 py-2 text-xs font-bold transition ${
+                                paid
+                                  ? "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                                  : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                              }`}
+                            >
+                              {paid ? "미납으로 변경" : "납부 처리"}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+
+                      {selectedPayments.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={4}
+                            className="px-4 py-12 text-center text-sm text-slate-400"
+                          >
+                            조건에 맞는 회원이 없습니다.
+                          </td>
+                        </tr>
+                      ) : null}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </>
         ) : (
           <div className="flex h-full min-h-[360px] items-center justify-center rounded-[1.5rem] bg-slate-50 text-sm font-medium text-slate-400">

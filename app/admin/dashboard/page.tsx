@@ -110,6 +110,8 @@ export default function DashboardPage() {
   const [selectedSessionId, setSelectedSessionId] = useState<
     number | null
   >(null);
+  const [selectedSpecialFeeId, setSelectedSpecialFeeId] =
+    useState<number | null>(null);
   const [showMemberModal, setShowMemberModal] = useState(false);
   const [editingMember, setEditingMember] =
     useState<Member | null>(null);
@@ -124,6 +126,8 @@ export default function DashboardPage() {
     useState(false);
   const [approvingRequestIds, setApprovingRequestIds] =
     useState<number[]>([]);
+  const [loadingSpecialFeeDetail, setLoadingSpecialFeeDetail] =
+    useState(false);
 
   const paymentMode = getPaymentMode();
   const subscriptionAmount = getSubscriptionAmount();
@@ -160,13 +164,11 @@ export default function DashboardPage() {
       nextMembers,
       nextRequests,
       nextSessions,
-      nextSpecialFees,
     ] = await Promise.all([
       requestJson<ClubInfo>("/api/club-info"),
       requestJson<Member[]>("/api/members"),
       requestJson<MemberRequest[]>("/api/member-request"),
       requestJson<ClubSession[]>("/api/sessions"),
-      requestJson<SpecialFee[]>("/api/special-fees"),
     ]);
 
     setClubInfo(nextClubInfo);
@@ -175,7 +177,6 @@ export default function DashboardPage() {
     setMembers(nextMembers);
     setRequests(nextRequests);
     setSessions(nextSessions);
-    setSpecialFees(nextSpecialFees);
   }
 
   async function refreshMembers() {
@@ -193,9 +194,58 @@ export default function DashboardPage() {
   }
 
   async function refreshSpecialFees() {
-    setSpecialFees(
-      await requestJson<SpecialFee[]>("/api/special-fees")
+    const nextSpecialFees = await requestJson<SpecialFee[]>(
+      "/api/special-fees"
     );
+
+    setSpecialFees((current) =>
+      nextSpecialFees.map((specialFee) => {
+        const existing = current.find(
+          (item) => item.id === specialFee.id
+        );
+
+        return existing?.payments
+          ? { ...specialFee, payments: existing.payments }
+          : specialFee;
+      })
+    );
+
+    setSelectedSpecialFeeId((current) => {
+      if (!nextSpecialFees.length) {
+        return null;
+      }
+
+      const exists = nextSpecialFees.some(
+        (specialFee) => specialFee.id === current
+      );
+
+      return exists ? current : nextSpecialFees[0].id;
+    });
+  }
+
+  async function refreshSpecialFeeDetail(
+    specialFeeId: number
+  ) {
+    setLoadingSpecialFeeDetail(true);
+
+    try {
+      const detail = await requestJson<SpecialFee>(
+        `/api/special-fees?id=${specialFeeId}`
+      );
+
+      setSpecialFees((current) =>
+        current.map((specialFee) =>
+          specialFee.id === specialFeeId
+            ? {
+                ...specialFee,
+                ...detail,
+              }
+            : specialFee
+        )
+      );
+    } finally {
+      setLoadingSpecialFeeDetail(false);
+    }
   }
 
   async function refreshFees(year = selectedYear) {
@@ -242,10 +292,32 @@ export default function DashboardPage() {
       return;
     }
 
-    refreshFees(selectedYear).catch((error: Error) => {
-      alert(error.message);
-    });
+    Promise.all([refreshFees(selectedYear), refreshSpecialFees()]).catch(
+      (error: Error) => {
+        alert(error.message);
+      }
+    );
   }, [activeTab, selectedYear]);
+
+  useEffect(() => {
+    if (activeTab !== "fees" || !selectedSpecialFeeId) {
+      return;
+    }
+
+    const selectedSpecialFee = specialFees.find(
+      (specialFee) => specialFee.id === selectedSpecialFeeId
+    );
+
+    if (selectedSpecialFee?.payments) {
+      return;
+    }
+
+    refreshSpecialFeeDetail(selectedSpecialFeeId).catch(
+      (error: Error) => {
+        alert(error.message);
+      }
+    );
+  }, [activeTab, selectedSpecialFeeId, specialFees]);
 
   useEffect(() => {
     const refreshLiveData = () => {
@@ -415,7 +487,9 @@ export default function DashboardPage() {
     await refreshMembers();
 
     if (!editingMember) {
-      await refreshSpecialFees();
+      if (activeTab === "fees") {
+        await refreshSpecialFees();
+      }
     }
   }
 
@@ -562,7 +636,9 @@ export default function DashboardPage() {
 
       void refreshRequests().catch(() => undefined);
       void refreshMembers().catch(() => undefined);
-      void refreshSpecialFees().catch(() => undefined);
+      if (activeTab === "fees") {
+        void refreshSpecialFees().catch(() => undefined);
+      }
     } finally {
       setApprovingRequestIds((current) =>
         current.filter((requestId) => requestId !== id)
@@ -641,12 +717,14 @@ export default function DashboardPage() {
     dueDate: string;
     description: string;
   }) {
-    await requestJson("/api/special-fees", {
+    const created = await requestJson<SpecialFee>("/api/special-fees", {
       method: "POST",
       body: JSON.stringify(payload),
     });
 
     await refreshSpecialFees();
+    setSelectedSpecialFeeId(created.id);
+    await refreshSpecialFeeDetail(created.id);
   }
 
   async function handleToggleSpecialFeePayment(
@@ -673,6 +751,7 @@ export default function DashboardPage() {
     });
 
     await refreshSpecialFees();
+    await refreshSpecialFeeDetail(specialFeeId);
   }
 
   async function handleUpdateSessionStatus(
@@ -833,6 +912,9 @@ export default function DashboardPage() {
             <SpecialFeesPanel
               members={activeMembers}
               specialFees={specialFees}
+              selectedFeeId={selectedSpecialFeeId}
+              loadingSelectedFee={loadingSpecialFeeDetail}
+              onSelectFee={setSelectedSpecialFeeId}
               onCreateFee={handleCreateSpecialFee}
               onTogglePayment={handleToggleSpecialFeePayment}
             />
