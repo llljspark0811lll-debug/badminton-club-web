@@ -11,6 +11,18 @@ type JoinConfig = {
   publicJoinToken: string;
 };
 
+const currentYear = new Date().getFullYear();
+const birthYears = Array.from(
+  { length: currentYear - 1939 },
+  (_, index) => String(currentYear - index)
+);
+const birthMonths = Array.from({ length: 12 }, (_, index) =>
+  String(index + 1).padStart(2, "0")
+);
+const birthDays = Array.from({ length: 31 }, (_, index) =>
+  String(index + 1).padStart(2, "0")
+);
+
 export default function JoinPage() {
   const params = useParams();
   const router = useRouter();
@@ -26,12 +38,12 @@ export default function JoinPage() {
     publicJoinToken: "",
   });
   const [submitting, setSubmitting] = useState(false);
-  const [birthInputActive, setBirthInputActive] =
-    useState(false);
+  const [birthYear, setBirthYear] = useState("");
+  const [birthMonth, setBirthMonth] = useState("");
+  const [birthDay, setBirthDay] = useState("");
   const [form, setForm] = useState({
     name: "",
     gender: "",
-    birth: "",
     phone: "",
     level: "",
     customFieldValue: "",
@@ -39,7 +51,9 @@ export default function JoinPage() {
   });
 
   useEffect(() => {
-    if (!accessKey) return;
+    if (!accessKey) {
+      return;
+    }
 
     fetch(`/api/public/clubs/${accessKey}`)
       .then((response) => response.json())
@@ -81,7 +95,7 @@ export default function JoinPage() {
       return;
     }
 
-    if (!form.birth) {
+    if (!birthYear || !birthMonth || !birthDay) {
       alert("생년월일을 입력해주세요.");
       return;
     }
@@ -96,6 +110,8 @@ export default function JoinPage() {
       return;
     }
 
+    const birth = `${birthYear}-${birthMonth}-${birthDay}`;
+
     setSubmitting(true);
 
     try {
@@ -104,7 +120,7 @@ export default function JoinPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
-          birth: new Date(form.birth).toISOString(),
+          birth: new Date(birth).toISOString(),
           phone: formatPhoneNumber(form.phone),
           joinToken: clubConfig.publicJoinToken,
         }),
@@ -165,21 +181,52 @@ export default function JoinPage() {
             ))}
           </div>
 
-          <input
-            type={birthInputActive || form.birth ? "date" : "text"}
-            className="w-full rounded-lg border p-3"
-            placeholder="생년월일을 등록하세요"
-            value={form.birth}
-            onFocus={() => setBirthInputActive(true)}
-            onBlur={() => {
-              if (!form.birth) {
-                setBirthInputActive(false);
+          <div className="grid grid-cols-3 gap-3">
+            <select
+              className="w-full rounded-lg border p-3"
+              value={birthYear}
+              onChange={(event) =>
+                setBirthYear(event.target.value)
               }
-            }}
-            onChange={(event) =>
-              setForm({ ...form, birth: event.target.value })
-            }
-          />
+            >
+              <option value="">년</option>
+              {birthYears.map((year) => (
+                <option key={year} value={year}>
+                  {year}년
+                </option>
+              ))}
+            </select>
+
+            <select
+              className="w-full rounded-lg border p-3"
+              value={birthMonth}
+              onChange={(event) =>
+                setBirthMonth(event.target.value)
+              }
+            >
+              <option value="">월</option>
+              {birthMonths.map((month) => (
+                <option key={month} value={month}>
+                  {Number(month)}월
+                </option>
+              ))}
+            </select>
+
+            <select
+              className="w-full rounded-lg border p-3"
+              value={birthDay}
+              onChange={(event) =>
+                setBirthDay(event.target.value)
+              }
+            >
+              <option value="">일</option>
+              {birthDays.map((day) => (
+                <option key={day} value={day}>
+                  {Number(day)}일
+                </option>
+              ))}
+            </select>
+          </div>
 
           <input
             placeholder="연락처"
