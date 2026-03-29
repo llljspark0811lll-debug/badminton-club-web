@@ -503,8 +503,12 @@ export default function DashboardPage() {
   }, [activeTab, selectedSessionId, sessions]);
 
   useEffect(() => {
-    const refreshLiveData = () => {
+    const refreshClubInfoOnly = () => {
       void refreshClubInfo().catch(() => undefined);
+    };
+
+    const refreshRequestData = () => {
+      refreshClubInfoOnly();
 
       if (activeTab === "requests") {
         void refreshRequests().catch(() => undefined);
@@ -513,26 +517,32 @@ export default function DashboardPage() {
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        refreshLiveData();
+        refreshRequestData();
       }
     };
 
-    const interval =
+    const clubInfoInterval = window.setInterval(
+      refreshClubInfoOnly,
+      4000
+    );
+
+    const requestsInterval =
       activeTab === "requests"
-        ? window.setInterval(refreshLiveData, 4000)
+        ? window.setInterval(refreshRequestData, 4000)
         : null;
 
-    window.addEventListener("focus", refreshLiveData);
+    window.addEventListener("focus", refreshRequestData);
     document.addEventListener(
       "visibilitychange",
       handleVisibilityChange
     );
 
     return () => {
-      if (interval) {
-        window.clearInterval(interval);
+      window.clearInterval(clubInfoInterval);
+      if (requestsInterval) {
+        window.clearInterval(requestsInterval);
       }
-      window.removeEventListener("focus", refreshLiveData);
+      window.removeEventListener("focus", refreshRequestData);
       document.removeEventListener(
         "visibilitychange",
         handleVisibilityChange
