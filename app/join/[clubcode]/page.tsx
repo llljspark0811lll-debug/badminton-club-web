@@ -189,7 +189,7 @@ export default function JoinPage() {
                 setBirthYear(event.target.value)
               }
             >
-              <option value="">년</option>
+              <option value="">생년</option>
               {birthYears.map((year) => (
                 <option key={year} value={year}>
                   {year}년
