@@ -29,6 +29,7 @@ export default function JoinPage() {
   const [form, setForm] = useState({
     name: "",
     gender: "",
+    birth: "",
     phone: "",
     level: "",
     customFieldValue: "",
@@ -78,6 +79,11 @@ export default function JoinPage() {
       return;
     }
 
+    if (!form.birth) {
+      alert("생년월일을 입력해주세요.");
+      return;
+    }
+
     if (!form.phone.trim()) {
       alert("연락처를 입력해주세요.");
       return;
@@ -96,7 +102,7 @@ export default function JoinPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
-          birth: new Date().toISOString(),
+          birth: new Date(form.birth).toISOString(),
           phone: formatPhoneNumber(form.phone),
           joinToken: clubConfig.publicJoinToken,
         }),
@@ -157,9 +163,14 @@ export default function JoinPage() {
             ))}
           </div>
 
-          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-500">
-            신청일은 오늘 날짜로 자동 기록됩니다.
-          </div>
+          <input
+            type="date"
+            className="w-full rounded-lg border p-3"
+            value={form.birth}
+            onChange={(event) =>
+              setForm({ ...form, birth: event.target.value })
+            }
+          />
 
           <input
             placeholder="연락처"

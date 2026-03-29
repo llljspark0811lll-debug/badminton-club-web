@@ -196,6 +196,169 @@ export default function DashboardPage() {
     );
   }
 
+  function setMemberFeeLocally(
+    memberId: number,
+    year: number,
+    month: number,
+    paid: boolean
+  ) {
+    setMembers((current) =>
+      current.map((member) => {
+        if (member.id !== memberId) {
+          return member;
+        }
+
+        const existingFee = member.fees.find(
+          (fee) => fee.year === year && fee.month === month
+        );
+
+        const nextFees = existingFee
+          ? member.fees.map((fee) =>
+              fee.year === year && fee.month === month
+                ? { ...fee, paid }
+                : fee
+            )
+          : [
+              ...member.fees,
+              {
+                id: -(memberId * 10000 + year * 100 + month),
+                year,
+                month,
+                paid,
+              },
+            ];
+
+        return {
+          ...member,
+          fees: nextFees,
+        };
+      })
+    );
+  }
+
+  function setAllMemberFeesLocally(
+    memberId: number,
+    year: number,
+    paid: boolean
+  ) {
+    setMembers((current) =>
+      current.map((member) => {
+        if (member.id !== memberId) {
+          return member;
+        }
+
+        const nextFees = [...member.fees];
+
+        for (let month = 1; month <= 12; month += 1) {
+          const existingIndex = nextFees.findIndex(
+            (fee) => fee.year === year && fee.month === month
+          );
+
+          if (existingIndex >= 0) {
+            nextFees[existingIndex] = {
+              ...nextFees[existingIndex],
+              paid,
+            };
+          } else {
+            nextFees.push({
+              id: -(memberId * 10000 + year * 100 + month),
+              year,
+              month,
+              paid,
+            });
+          }
+        }
+
+        return {
+          ...member,
+          fees: nextFees,
+        };
+      })
+    );
+  }
+
+  function setSpecialFeePaymentLocally(
+    specialFeeId: number,
+    memberId: number,
+    paid: boolean
+  ) {
+    setSpecialFees((current) =>
+      current.map((specialFee) => {
+        if (specialFee.id !== specialFeeId) {
+          return specialFee;
+        }
+
+        const existingPayment = specialFee.payments.find(
+          (payment) => payment.memberId === memberId
+        );
+
+        if (existingPayment) {
+          return {
+            ...specialFee,
+            payments: specialFee.payments.map((payment) =>
+              payment.memberId === memberId
+                ? {
+                    ...payment,
+                    paid,
+                    paidAt: paid ? new Date().toISOString() : null,
+                  }
+                : payment
+            ),
+          };
+        }
+
+        const member = members.find(
+          (currentMember) => currentMember.id === memberId
+        );
+
+        if (!member) {
+          return specialFee;
+        }
+
+        return {
+          ...specialFee,
+          payments: [
+            ...specialFee.payments,
+            {
+              id: -(specialFeeId * 10000 + memberId),
+              paid,
+              paidAt: paid ? new Date().toISOString() : null,
+              note: "",
+              createdAt: new Date().toISOString(),
+              memberId,
+              specialFeeId,
+              member,
+            },
+          ],
+        };
+      })
+    );
+  }
+
+  function setAttendanceLocally(
+    participantId: number,
+    attendanceStatus: "PENDING" | "PRESENT" | "ABSENT" | "LATE"
+  ) {
+    setSessions((current) =>
+      current.map((session) => ({
+        ...session,
+        participants: session.participants.map((participant) =>
+          participant.id === participantId
+            ? {
+                ...participant,
+                attendanceStatus,
+                checkedInAt:
+                  attendanceStatus === "PRESENT" ||
+                  attendanceStatus === "LATE"
+                    ? new Date().toISOString()
+                    : null,
+              }
+            : participant
+        ),
+      }))
+    );
+  }
+
   async function performLogout() {
     try {
       await fetch("/api/admin/logout", {
@@ -228,6 +391,36 @@ export default function DashboardPage() {
       setSelectedSessionId(sessions[0].id);
     }
   }, [selectedSessionId, sessions]);
+
+  useEffect(() => {
+    const refreshLiveData = () => {
+      void refreshRequests().catch(() => undefined);
+      void refreshSessions().catch(() => undefined);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshLiveData();
+      }
+    };
+
+    const interval = window.setInterval(refreshLiveData, 4000);
+
+    window.addEventListener("focus", refreshLiveData);
+    document.addEventListener(
+      "visibilitychange",
+      handleVisibilityChange
+    );
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshLiveData);
+      document.removeEventListener(
+        "visibilitychange",
+        handleVisibilityChange
+      );
+    };
+  }, []);
 
   useEffect(() => {
     if (window.TossPayments) {
@@ -416,17 +609,26 @@ export default function DashboardPage() {
     month: number,
     currentPaid: boolean
   ) {
-    await requestJson("/api/fees", {
-      method: "POST",
-      body: JSON.stringify({
-        memberId,
-        year,
-        month,
-        paid: !currentPaid,
-      }),
-    });
+    const nextPaid = !currentPaid;
 
-    await refreshMembers();
+    setMemberFeeLocally(memberId, year, month, nextPaid);
+
+    try {
+      await requestJson("/api/fees", {
+        method: "POST",
+        body: JSON.stringify({
+          memberId,
+          year,
+          month,
+          paid: nextPaid,
+        }),
+      });
+
+      void refreshMembers().catch(() => undefined);
+    } catch (error) {
+      setMemberFeeLocally(memberId, year, month, currentPaid);
+      throw error;
+    }
   }
 
   async function handleAllPaid(memberId: number) {
@@ -434,21 +636,28 @@ export default function DashboardPage() {
       return;
     }
 
-    await Promise.all(
-      Array.from({ length: 12 }, (_, index) =>
-        requestJson("/api/fees", {
-          method: "POST",
-          body: JSON.stringify({
-            memberId,
-            year: selectedYear,
-            month: index + 1,
-            paid: true,
-          }),
-        })
-      )
-    );
+    setAllMemberFeesLocally(memberId, selectedYear, true);
 
-    await refreshMembers();
+    try {
+      await Promise.all(
+        Array.from({ length: 12 }, (_, index) =>
+          requestJson("/api/fees", {
+            method: "POST",
+            body: JSON.stringify({
+              memberId,
+              year: selectedYear,
+              month: index + 1,
+              paid: true,
+            }),
+          })
+        )
+      );
+
+      void refreshMembers().catch(() => undefined);
+    } catch (error) {
+      void refreshMembers().catch(() => undefined);
+      throw error;
+    }
   }
 
   async function handleAllUnpaid(memberId: number) {
@@ -456,21 +665,28 @@ export default function DashboardPage() {
       return;
     }
 
-    await Promise.all(
-      Array.from({ length: 12 }, (_, index) =>
-        requestJson("/api/fees", {
-          method: "POST",
-          body: JSON.stringify({
-            memberId,
-            year: selectedYear,
-            month: index + 1,
-            paid: false,
-          }),
-        })
-      )
-    );
+    setAllMemberFeesLocally(memberId, selectedYear, false);
 
-    await refreshMembers();
+    try {
+      await Promise.all(
+        Array.from({ length: 12 }, (_, index) =>
+          requestJson("/api/fees", {
+            method: "POST",
+            body: JSON.stringify({
+              memberId,
+              year: selectedYear,
+              month: index + 1,
+              paid: false,
+            }),
+          })
+        )
+      );
+
+      void refreshMembers().catch(() => undefined);
+    } catch (error) {
+      void refreshMembers().catch(() => undefined);
+      throw error;
+    }
   }
 
   async function handleApprove(id: number) {
@@ -600,16 +816,32 @@ export default function DashboardPage() {
     memberId: number,
     paid: boolean
   ) {
-    await requestJson("/api/special-fees/payment", {
-      method: "POST",
-      body: JSON.stringify({
-        specialFeeId,
-        memberId,
-        paid: !paid,
-      }),
-    });
+    const nextPaid = !paid;
+    const confirmMessage = nextPaid
+      ? "납부 처리하시겠습니까?"
+      : "미납 상태로 변경하시겠습니까?";
 
-    await refreshSpecialFees();
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+
+    setSpecialFeePaymentLocally(specialFeeId, memberId, nextPaid);
+
+    try {
+      await requestJson("/api/special-fees/payment", {
+        method: "POST",
+        body: JSON.stringify({
+          specialFeeId,
+          memberId,
+          paid: nextPaid,
+        }),
+      });
+
+      void refreshSpecialFees().catch(() => undefined);
+    } catch (error) {
+      setSpecialFeePaymentLocally(specialFeeId, memberId, paid);
+      throw error;
+    }
   }
 
   async function handleUpdateSessionStatus(
@@ -632,15 +864,22 @@ export default function DashboardPage() {
       | "ABSENT"
       | "LATE"
   ) {
-    await requestJson("/api/sessions/attendance", {
-      method: "POST",
-      body: JSON.stringify({
-        participantId,
-        attendanceStatus,
-      }),
-    });
+    setAttendanceLocally(participantId, attendanceStatus);
 
-    await refreshSessions();
+    try {
+      await requestJson("/api/sessions/attendance", {
+        method: "POST",
+        body: JSON.stringify({
+          participantId,
+          attendanceStatus,
+        }),
+      });
+
+      void refreshSessions().catch(() => undefined);
+    } catch (error) {
+      void refreshSessions().catch(() => undefined);
+      throw error;
+    }
   }
 
   return (
