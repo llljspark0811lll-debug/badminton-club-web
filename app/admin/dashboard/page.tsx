@@ -93,6 +93,14 @@ async function requestJson<T>(
   return data as T;
 }
 
+function isIgnorableDashboardNotFound(error: unknown) {
+  return (
+    error instanceof Error &&
+    (error.message.includes("수시회비 항목을 찾을 수 없습니다") ||
+      error.message.includes("운동 일정을 찾을 수 없습니다"))
+  );
+}
+
 export default function DashboardPage() {
   const router = useRouter();
 
@@ -371,6 +379,10 @@ export default function DashboardPage() {
       refreshFees(selectedYear),
       specialFeesLoaded ? Promise.resolve() : refreshSpecialFees(),
     ]).catch((error: Error) => {
+      if (isIgnorableDashboardNotFound(error)) {
+        return;
+      }
+
       alert(error.message);
     });
   }, [activeTab, selectedYear, membersLoaded, specialFeesLoaded]);
@@ -384,6 +396,10 @@ export default function DashboardPage() {
     }
 
     refreshSessions().catch((error: Error) => {
+      if (isIgnorableDashboardNotFound(error)) {
+        return;
+      }
+
       alert(error.message);
     });
   }, [activeTab]);
