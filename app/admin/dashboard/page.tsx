@@ -146,6 +146,8 @@ export default function DashboardPage() {
   const [specialFeesLoaded, setSpecialFeesLoaded] =
     useState(false);
   const [loadingFees, setLoadingFees] = useState(false);
+  const [loadingSpecialFees, setLoadingSpecialFees] =
+    useState(false);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [loadingRequests, setLoadingRequests] = useState(false);
 
@@ -180,6 +182,10 @@ export default function DashboardPage() {
   const hasCachedFeesForSelectedYear = Boolean(
     feesCache[selectedYear]
   );
+  const shouldShowInitialFeesLoading =
+    activeTab === "fees" &&
+    ((loadingFees && !hasCachedFeesForSelectedYear) ||
+      (loadingSpecialFees && !specialFeesLoaded));
 
   async function refreshClubInfo() {
     const nextClubInfo = await requestJson<ClubInfo>("/api/club-info");
@@ -287,56 +293,62 @@ export default function DashboardPage() {
   }
 
   async function refreshSpecialFees() {
-    const nextSpecialFees = await requestJson<SpecialFee[]>(
-      "/api/special-fees"
-    );
+    setLoadingSpecialFees(true);
 
-    setSpecialFeesLoaded(true);
-
-    const nextSelectedSpecialFeeId =
-      nextSpecialFees.length === 0
-        ? null
-        : nextSpecialFees.some(
-              (specialFee) =>
-                specialFee.id === selectedSpecialFeeId
-            )
-          ? selectedSpecialFeeId
-          : nextSpecialFees[0].id;
-
-    let mergedSpecialFees = nextSpecialFees.map((specialFee) => {
-      const existing = specialFees.find(
-        (item) => item.id === specialFee.id
+    try {
+      const nextSpecialFees = await requestJson<SpecialFee[]>(
+        "/api/special-fees"
       );
 
-      return existing?.payments
-        ? { ...specialFee, payments: existing.payments }
-        : specialFee;
-    });
+      setSpecialFeesLoaded(true);
 
-    if (nextSelectedSpecialFeeId) {
-      const selectedSummary = mergedSpecialFees.find(
-        (specialFee) => specialFee.id === nextSelectedSpecialFeeId
-      );
+      const nextSelectedSpecialFeeId =
+        nextSpecialFees.length === 0
+          ? null
+          : nextSpecialFees.some(
+                (specialFee) =>
+                  specialFee.id === selectedSpecialFeeId
+              )
+            ? selectedSpecialFeeId
+            : nextSpecialFees[0].id;
 
-      if (selectedSummary && !selectedSummary.payments) {
-        try {
-          const detail = await requestJson<SpecialFee>(
-            `/api/special-fees?id=${nextSelectedSpecialFeeId}`
-          );
+      let mergedSpecialFees = nextSpecialFees.map((specialFee) => {
+        const existing = specialFees.find(
+          (item) => item.id === specialFee.id
+        );
 
-          mergedSpecialFees = mergedSpecialFees.map((specialFee) =>
-            specialFee.id === nextSelectedSpecialFeeId
-              ? { ...specialFee, ...detail }
-              : specialFee
-          );
-        } catch {
-          // Ignore initial detail load failures on tab open.
+        return existing?.payments
+          ? { ...specialFee, payments: existing.payments }
+          : specialFee;
+      });
+
+      if (nextSelectedSpecialFeeId) {
+        const selectedSummary = mergedSpecialFees.find(
+          (specialFee) => specialFee.id === nextSelectedSpecialFeeId
+        );
+
+        if (selectedSummary && !selectedSummary.payments) {
+          try {
+            const detail = await requestJson<SpecialFee>(
+              `/api/special-fees?id=${nextSelectedSpecialFeeId}`
+            );
+
+            mergedSpecialFees = mergedSpecialFees.map((specialFee) =>
+              specialFee.id === nextSelectedSpecialFeeId
+                ? { ...specialFee, ...detail }
+                : specialFee
+            );
+          } catch {
+            // Ignore initial detail load failures on tab open.
+          }
         }
       }
-    }
 
-    setSpecialFees(mergedSpecialFees);
-    setSelectedSpecialFeeId(nextSelectedSpecialFeeId);
+      setSpecialFees(mergedSpecialFees);
+      setSelectedSpecialFeeId(nextSelectedSpecialFeeId);
+    } finally {
+      setLoadingSpecialFees(false);
+    }
   }
 
   async function refreshSpecialFeeDetail(
@@ -442,27 +454,17 @@ export default function DashboardPage() {
       return;
     }
 
-    if (!membersLoaded) {
-      void refreshMembers().catch((error: Error) => {
-        alert(error.message);
-      });
-    }
+    Promise.all([
+      membersLoaded ? Promise.resolve() : refreshMembers(),
+      refreshFees(selectedYear),
+      specialFeesLoaded ? Promise.resolve() : refreshSpecialFees(),
+    ]).catch((error: Error) => {
+      if (isIgnorableDashboardNotFound(error)) {
+        return;
+      }
 
-    void refreshFees(selectedYear).catch((error: Error) => {
       alert(error.message);
     });
-
-    if (!specialFeesLoaded) {
-      window.setTimeout(() => {
-        void refreshSpecialFees().catch((error: Error) => {
-          if (isIgnorableDashboardNotFound(error)) {
-            return;
-          }
-
-          alert(error.message);
-        });
-      }, 120);
-    }
   }, [activeTab, selectedYear, membersLoaded, specialFeesLoaded]);
 
   useEffect(() => {
@@ -1344,7 +1346,7 @@ export default function DashboardPage() {
 
         {activeTab === "fees" ? (
           <div className="space-y-6">
-            {loadingFees && !hasCachedFeesForSelectedYear
+            {shouldShowInitialFeesLoading
               ? renderLoadingCard(
                   "월회비 표를 불러오는 중입니다."
                 )
