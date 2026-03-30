@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import type { Fee, Member } from "@/components/dashboard/types";
 
 type FeesTableProps = {
@@ -18,6 +18,23 @@ type FeesTableProps = {
 
 type FeeQuickFilter = "ALL" | "UNPAID" | "PAID";
 
+type FeeRowProps = {
+  member: Member;
+  monthStates: boolean[];
+  selectedYear: number;
+  onToggleFee: (
+    memberId: number,
+    year: number,
+    month: number,
+    currentPaid: boolean
+  ) => void;
+  onMarkAllPaid: (memberId: number) => void;
+  onMarkAllUnpaid: (memberId: number) => void;
+};
+
+const MONTHS = Array.from({ length: 12 }, (_, index) => index + 1);
+const EMPTY_MONTH_STATES = MONTHS.map(() => false);
+
 function getYearOptions(selectedYear: number) {
   const currentYear = new Date().getFullYear();
   const years = new Set<number>();
@@ -30,6 +47,86 @@ function getYearOptions(selectedYear: number) {
 
   return [...years].sort((left, right) => right - left);
 }
+
+const FeeMemberRow = memo(
+  function FeeMemberRow({
+    member,
+    monthStates,
+    selectedYear,
+    onToggleFee,
+    onMarkAllPaid,
+    onMarkAllUnpaid,
+  }: FeeRowProps) {
+    return (
+      <tr className="hover:bg-slate-50">
+        <td className="px-4 py-4 font-bold text-slate-900">
+          {member.name}
+        </td>
+        {MONTHS.map((month, index) => {
+          const isPaid = monthStates[index];
+
+          return (
+            <td key={month} className="px-2 py-4 text-center">
+              <button
+                onClick={() =>
+                  onToggleFee(
+                    member.id,
+                    selectedYear,
+                    month,
+                    isPaid
+                  )
+                }
+                className={`inline-flex h-9 w-9 items-center justify-center rounded-xl text-lg font-black transition ${
+                  isPaid
+                    ? "bg-rose-500 text-white hover:bg-rose-600"
+                    : "bg-slate-100 text-slate-300 hover:bg-slate-200"
+                }`}
+                aria-label={`${member.name} ${month}월 회비 ${
+                  isPaid ? "미납으로 변경" : "납부로 변경"
+                }`}
+              >
+                ✓
+              </button>
+            </td>
+          );
+        })}
+        <td className="px-4 py-4">
+          <div className="flex gap-2">
+            <button
+              onClick={() => onMarkAllPaid(member.id)}
+              className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 transition hover:bg-rose-100"
+            >
+              전체 납부
+            </button>
+            <button
+              onClick={() => onMarkAllUnpaid(member.id)}
+              className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-200"
+            >
+              전체 미납
+            </button>
+          </div>
+        </td>
+      </tr>
+    );
+  },
+  (prevProps, nextProps) => {
+    if (prevProps.member.id !== nextProps.member.id) {
+      return false;
+    }
+
+    if (prevProps.member.name !== nextProps.member.name) {
+      return false;
+    }
+
+    if (prevProps.selectedYear !== nextProps.selectedYear) {
+      return false;
+    }
+
+    return prevProps.monthStates.every(
+      (value, index) => value === nextProps.monthStates[index]
+    );
+  }
+);
 
 export function FeesTable({
   members,
@@ -48,22 +145,30 @@ export function FeesTable({
     [selectedYear]
   );
 
-  const feeMap = useMemo(() => {
-    const nextMap = new Map<string, Fee>();
+  const memberMonthStates = useMemo(() => {
+    const paidKeySet = new Set<string>();
 
     for (const fee of fees) {
-      if (fee.memberId === undefined) {
+      if (fee.memberId === undefined || !fee.paid) {
         continue;
       }
 
+      paidKeySet.add(`${fee.memberId}-${fee.year}-${fee.month}`);
+    }
+
+    const nextMap = new Map<number, boolean[]>();
+
+    for (const member of members) {
       nextMap.set(
-        `${fee.memberId}-${fee.year}-${fee.month}`,
-        fee
+        member.id,
+        MONTHS.map((month) =>
+          paidKeySet.has(`${member.id}-${selectedYear}-${month}`)
+        )
       );
     }
 
     return nextMap;
-  }, [fees]);
+  }, [fees, members, selectedYear]);
 
   const filteredMembers = useMemo(() => {
     if (quickFilter === "ALL") {
@@ -71,16 +176,9 @@ export function FeesTable({
     }
 
     return members.filter((member) => {
-      const paidMonths = Array.from(
-        { length: 12 },
-        (_, index) => index + 1
-      ).filter((month) => {
-        const fee = feeMap.get(
-          `${member.id}-${selectedYear}-${month}`
-        );
-
-        return Boolean(fee?.paid);
-      }).length;
+      const monthStates =
+        memberMonthStates.get(member.id) ?? EMPTY_MONTH_STATES;
+      const paidMonths = monthStates.filter(Boolean).length;
 
       if (quickFilter === "UNPAID") {
         return paidMonths < 12;
@@ -88,7 +186,7 @@ export function FeesTable({
 
       return paidMonths === 12;
     });
-  }, [feeMap, members, quickFilter, selectedYear]);
+  }, [memberMonthStates, members, quickFilter]);
 
   return (
     <div className="space-y-4">
@@ -158,12 +256,12 @@ export function FeesTable({
             <thead className="bg-slate-50 text-left text-slate-500">
               <tr>
                 <th className="px-4 py-4 font-semibold">회원</th>
-                {Array.from({ length: 12 }, (_, index) => (
+                {MONTHS.map((month) => (
                   <th
-                    key={index}
+                    key={month}
                     className="px-2 py-4 text-center font-semibold"
                   >
-                    {index + 1}월
+                    {month}월
                   </th>
                 ))}
                 <th className="px-4 py-4 font-semibold">일괄 처리</th>
@@ -171,62 +269,18 @@ export function FeesTable({
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredMembers.map((member) => (
-                <tr key={member.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-4 font-bold text-slate-900">
-                    {member.name}
-                  </td>
-                  {Array.from({ length: 12 }, (_, index) => {
-                    const month = index + 1;
-                    const matchedFee = feeMap.get(
-                      `${member.id}-${selectedYear}-${month}`
-                    );
-                    const isPaid = Boolean(matchedFee?.paid);
-
-                    return (
-                      <td
-                        key={month}
-                        className="px-2 py-4 text-center"
-                      >
-                        <button
-                          onClick={() =>
-                            onToggleFee(
-                              member.id,
-                              selectedYear,
-                              month,
-                              isPaid
-                            )
-                          }
-                          className={`inline-flex h-9 w-9 items-center justify-center rounded-xl text-lg font-black transition ${
-                            isPaid
-                              ? "bg-rose-500 text-white hover:bg-rose-600"
-                              : "bg-slate-100 text-slate-300 hover:bg-slate-200"
-                          }`}
-                          aria-label={`${member.name} ${month}월 회비 ${
-                            isPaid ? "미납으로 변경" : "납부로 변경"
-                          }`}
-                        >
-                          ✓
-                        </button>
-                      </td>
-                    );
-                  })}
-                  <td className="px-4 py-4">
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => onMarkAllPaid(member.id)}
-                        className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 transition hover:bg-rose-100"
-                      >
-                        전체 납부
-                      </button>
-                      <button
-                        onClick={() => onMarkAllUnpaid(member.id)}
-                        className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-200"
-                      >
-                        전체 미납
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+                <FeeMemberRow
+                  key={member.id}
+                  member={member}
+                  monthStates={
+                    memberMonthStates.get(member.id) ??
+                    EMPTY_MONTH_STATES
+                  }
+                  selectedYear={selectedYear}
+                  onToggleFee={onToggleFee}
+                  onMarkAllPaid={onMarkAllPaid}
+                  onMarkAllUnpaid={onMarkAllUnpaid}
+                />
               ))}
 
               {filteredMembers.length === 0 ? (

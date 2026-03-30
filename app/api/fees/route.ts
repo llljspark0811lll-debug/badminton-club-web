@@ -14,17 +14,31 @@ const feeSelect = {
   paid: true,
 } as const;
 
-async function findClubMember(memberId: number, clubId: number) {
-  return prisma.member.findFirst({
-    where: {
-      id: memberId,
-      clubId,
-      deleted: false,
-    },
-    select: {
-      id: true,
-    },
-  });
+type FeeRow = {
+  id: number;
+  memberId: number;
+  year: number;
+  month: number;
+  paid: boolean;
+};
+
+type MemberRow = {
+  id: number;
+};
+
+async function getValidMember(
+  memberId: number,
+  clubId: number
+) {
+  const rows = await prisma.$queryRaw<MemberRow[]>`
+    SELECT "id"
+    FROM "Member"
+    WHERE "id" = ${memberId}
+      AND "clubId" = ${clubId}
+      AND "deleted" = false
+  `;
+
+  return rows[0] ?? null;
 }
 
 export async function GET(req: Request) {
@@ -92,22 +106,21 @@ export async function POST(req: Request) {
       );
     }
 
-    const member = await findClubMember(memberId, admin.clubId);
-
-    if (!member) {
-      return notFoundResponse(
-        "회비를 수정할 회원을 찾을 수 없습니다."
-      );
-    }
-
     if (!paid) {
-      await prisma.fee.deleteMany({
-        where: {
-          memberId: member.id,
-          year,
-          month,
-        },
-      });
+      const member = await getValidMember(memberId, admin.clubId);
+
+      if (!member) {
+        return notFoundResponse(
+          "회비를 수정할 회원을 찾을 수 없습니다."
+        );
+      }
+
+      await prisma.$executeRaw`
+        DELETE FROM "Fee"
+        WHERE "memberId" = ${member.id}
+          AND "year" = ${year}
+          AND "month" = ${month}
+      `;
 
       return NextResponse.json({
         id: 0,
@@ -118,23 +131,33 @@ export async function POST(req: Request) {
       });
     }
 
-    const fee = await prisma.fee.upsert({
-      where: {
-        memberId_year_month: {
-          memberId: member.id,
-          year,
-          month,
-        },
-      },
-      update: { paid: true },
-      create: {
-        memberId: member.id,
-        year,
-        month,
-        paid: true,
-      },
-      select: feeSelect,
-    });
+    const fees = await prisma.$queryRaw<FeeRow[]>`
+      WITH valid_member AS (
+        SELECT "id"
+        FROM "Member"
+        WHERE "id" = ${memberId}
+          AND "clubId" = ${admin.clubId}
+          AND "deleted" = false
+      ),
+      upserted AS (
+        INSERT INTO "Fee" ("memberId", "year", "month", "paid")
+        SELECT "id", ${year}, ${month}, true
+        FROM valid_member
+        ON CONFLICT ("memberId", "year", "month")
+        DO UPDATE SET "paid" = EXCLUDED."paid"
+        RETURNING "id", "memberId", "year", "month", "paid"
+      )
+      SELECT "id", "memberId", "year", "month", "paid"
+      FROM upserted
+    `;
+
+    const fee = fees[0];
+
+    if (!fee) {
+      return notFoundResponse(
+        "회비를 수정할 회원을 찾을 수 없습니다."
+      );
+    }
 
     return NextResponse.json(fee);
   } catch (error) {
@@ -166,56 +189,51 @@ export async function PUT(req: Request) {
       );
     }
 
-    const member = await findClubMember(memberId, admin.clubId);
-
-    if (!member) {
-      return notFoundResponse(
-        "회비를 수정할 회원을 찾을 수 없습니다."
-      );
-    }
-
     if (!paid) {
-      await prisma.fee.deleteMany({
-        where: {
-          memberId: member.id,
-          year,
-        },
-      });
+      const member = await getValidMember(memberId, admin.clubId);
+
+      if (!member) {
+        return notFoundResponse(
+          "회비를 수정할 회원을 찾을 수 없습니다."
+        );
+      }
+
+      await prisma.$executeRaw`
+        DELETE FROM "Fee"
+        WHERE "memberId" = ${member.id}
+          AND "year" = ${year}
+      `;
 
       return NextResponse.json([]);
     }
 
-    const fees = await prisma.$transaction(async (tx) => {
-      await tx.fee.updateMany({
-        where: {
-          memberId: member.id,
-          year,
-          paid: false,
-        },
-        data: {
-          paid: true,
-        },
-      });
+    const fees = await prisma.$queryRaw<FeeRow[]>`
+      WITH valid_member AS (
+        SELECT "id"
+        FROM "Member"
+        WHERE "id" = ${memberId}
+          AND "clubId" = ${admin.clubId}
+          AND "deleted" = false
+      ),
+      upserted AS (
+        INSERT INTO "Fee" ("memberId", "year", "month", "paid")
+        SELECT vm."id", ${year}, gs.month, true
+        FROM valid_member vm
+        CROSS JOIN generate_series(1, 12) AS gs(month)
+        ON CONFLICT ("memberId", "year", "month")
+        DO UPDATE SET "paid" = EXCLUDED."paid"
+        RETURNING "id", "memberId", "year", "month", "paid"
+      )
+      SELECT "id", "memberId", "year", "month", "paid"
+      FROM upserted
+      ORDER BY "month" ASC
+    `;
 
-      await tx.fee.createMany({
-        data: Array.from({ length: 12 }, (_, index) => ({
-          memberId: member.id,
-          year,
-          month: index + 1,
-          paid: true,
-        })),
-        skipDuplicates: true,
-      });
-
-      return tx.fee.findMany({
-        where: {
-          memberId: member.id,
-          year,
-          paid: true,
-        },
-        select: feeSelect,
-      });
-    });
+    if (fees.length === 0) {
+      return notFoundResponse(
+        "회비를 수정할 회원을 찾을 수 없습니다."
+      );
+    }
 
     return NextResponse.json(fees);
   } catch (error) {
