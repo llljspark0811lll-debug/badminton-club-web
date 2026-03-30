@@ -6,6 +6,7 @@ import { nanoid } from "nanoid";
 import { AttendancePanel } from "@/components/dashboard/AttendancePanel";
 import { ClubSettingsPanel } from "@/components/dashboard/ClubSettingsPanel";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
+import { StatsOverview } from "@/components/dashboard/StatsOverview";
 import { DashboardTabs } from "@/components/dashboard/DashboardTabs";
 import { DeletedMembersTable } from "@/components/dashboard/DeletedMembersTable";
 import { FeesTable } from "@/components/dashboard/FeesTable";
@@ -18,6 +19,7 @@ import { SubscriptionOverlay } from "@/components/dashboard/SubscriptionOverlay"
 import type {
   ClubInfo,
   ClubSession,
+  DashboardStats,
   DashboardTab,
   Fee,
   FeeMember,
@@ -112,6 +114,7 @@ export default function DashboardPage() {
   const [specialFees, setSpecialFees] = useState<SpecialFee[]>([]);
   const [fees, setFees] = useState<Fee[]>([]);
   const [feeMembers, setFeeMembers] = useState<FeeMember[]>([]);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
   const [feesCache, setFeesCache] = useState<Record<number, Fee[]>>(
     {}
   );
@@ -157,6 +160,8 @@ export default function DashboardPage() {
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [feeMembersLoaded, setFeeMembersLoaded] =
     useState(false);
+  const [loadingStats, setLoadingStats] = useState(false);
+  const [statsLoaded, setStatsLoaded] = useState(false);
 
   const paymentMode = getPaymentMode();
   const subscriptionAmount = getSubscriptionAmount();
@@ -241,6 +246,19 @@ export default function DashboardPage() {
       setRequestsLoaded(true);
     } finally {
       setLoadingRequests(false);
+    }
+  }
+
+  async function refreshStats() {
+    setLoadingStats(true);
+
+    try {
+      setStats(
+        await requestJson<DashboardStats>("/api/dashboard-stats")
+      );
+      setStatsLoaded(true);
+    } finally {
+      setLoadingStats(false);
     }
   }
 
@@ -469,6 +487,14 @@ export default function DashboardPage() {
       router.push("/admin/login");
     });
   }, [router]);
+
+  useEffect(() => {
+    if (activeTab !== "stats" || statsLoaded) {
+      return;
+    }
+
+    refreshStats().catch(() => undefined);
+  }, [activeTab, statsLoaded]);
 
   useEffect(() => {
     if (
@@ -1384,6 +1410,10 @@ export default function DashboardPage() {
             />
           </div>
         </div>
+
+        {activeTab === "stats" ? (
+          <StatsOverview stats={stats} loading={loadingStats} />
+        ) : null}
 
         {activeTab === "members" ? (
           <div className="space-y-6">

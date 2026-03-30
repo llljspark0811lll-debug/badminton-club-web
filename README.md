@@ -1,36 +1,176 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 배드민턴 클럽 운영 SaaS
 
-## Getting Started
+배드민턴 클럽 총무와 운영진이 회원, 가입 신청, 운동 일정, 출석, 월회비, 수시회비, 게스트를 한 곳에서 관리할 수 있도록 만든 운영용 웹 서비스입니다.
 
-First, run the development server:
+핵심 목표는 단순한 회원명부 앱이 아니라, `카카오톡 + 엑셀 + 개인 메모`로 흩어져 있던 클럽 운영을 한 화면에서 체계화하는 것입니다.
+
+## 제품 방향
+
+이 서비스는 아래 사용자를 중심으로 설계합니다.
+
+- 클럽 회장
+- 총무
+- 운영진 2~3명
+
+핵심 가치는 아래 세 가지입니다.
+
+- 회원과 승인 흐름을 정리한다
+- 운동 일정과 참석/게스트/출석 기록을 남긴다
+- 회비와 운영 통계를 함께 관리한다
+
+## 1차 로드맵 완료 범위
+
+### 관리자/클럽
+
+- 클럽 생성
+- 관리자 로그인 / 로그아웃
+- 마지막 로그인 아이디 기억
+- 관리자 이메일 기반 복구 흐름 준비
+- 클럽별 추가 정보 항목 이름 설정
+  - 예: 차량번호, 소속클럽, 기수
+
+### 회원 관리
+
+- 회원 직접 등록
+- 회원 수정
+- 회원 탈퇴 처리
+- 탈퇴 회원 복구
+- 영구 삭제
+- 이름 / 성별 / 급수 기준 필터와 정렬
+- 모바일 카드형 회원 목록
+
+### 가입 신청
+
+- 랜덤 토큰 기반 가입 신청 링크
+- 회원 직접 가입 신청
+- 운영진 승인 / 거절
+- 가입 신청 배지 실시간 반영
+
+### 운동 일정 / 출석
+
+- 운동 일정 생성
+- 랜덤 토큰 기반 참석 링크
+- 회원 1회 확인 후 자동 기억
+- 참석 신청 / 취소
+- 게스트 최대 5명 동반 등록
+- 정원 초과 시 자동 대기
+- 출석 / 지각 / 결석 처리
+- 일정 상태 변경
+- 일정 삭제
+
+### 회비 관리
+
+- 연도별 월회비 관리
+- 전체 납부 / 전체 미납 처리
+- 수시회비 생성
+- 수시회비 납부 처리
+- 수시회비 삭제
+- 미납 회원 필터
+
+### 운영 UX / 성능
+
+- 모바일 최적화
+- 회비 / 일정 / 출석 초기 로딩 표시 개선
+- 일부 탭 지연 로딩
+- 가입 신청 / 일정 명단 실시간 반영 개선
+- Vercel 함수 서울 리전 적용
+
+## 2차 로드맵
+
+2차는 `총무가 왜 이 서비스를 계속 써야 하는가`를 더 강하게 만드는 단계입니다.
+
+### 2-1. 운영 통계
+
+- 주간 운영 통계
+  - 운동 일정 수
+  - 참석 신청 수
+  - 게스트 수
+  - 대기 인원 수
+- 월간 운영 통계
+  - 운동 일정 수
+  - 참석 신청 수
+  - 신규 회원 수
+  - 미납 회원 수
+- 월간 활동 상위 회원
+- 실제 출석 처리 수
+
+### 2-2. 총무 인사이트
+
+- 저참여 회원 파악
+- 노쇼 / 지각 추이 확인
+- 게스트 유입 추세 확인
+- 정원 초과가 자주 나는 일정 파악
+
+### 2-3. 운영 자동화
+
+- 카카오톡 공유용 안내 문구 자동 생성
+- 오늘 해야 할 일 요약
+- 미납 회원 / 승인 대기 / 대기 인원 빠른 요약
+- 리마인드 알림 구조 준비
+
+### 2-4. 데이터 누적 가치 강화
+
+- 회원별 활동 이력
+- 월별 참석률
+- 회비/출석 연계 보기
+- 운영진 교체 시 데이터 인수인계 용이화
+
+## 현재 2차 첫 기능
+
+현재 2차 첫 단계로 `주간/월간 운영 통계`를 별도 `통계` 탭으로 추가했습니다.
+
+통계 구성:
+
+- 이번 주
+  - 운동 일정 수
+  - 참석 신청 수
+  - 게스트 수
+  - 대기 인원 수
+- 이번 달
+  - 운동 일정 수
+  - 참석 신청 수
+  - 신규 회원 수
+  - 미납 회원 수
+- 추가 인사이트
+  - 실제 출석 처리 수
+  - 활동 상위 회원
+
+## 변경 이력
+
+이 파일은 앞으로 기능 추가와 방향 변경 시 계속 갱신합니다.
+
+### 2026-03-30
+
+- 1차 배포 기능 범위 정리 완료
+- 2차 로드맵 초안 정리
+- 주간/월간 운영 통계 기능 추가
+- 운영 통계를 회원탭이 아닌 별도 `통계` 탭으로 분리
+
+## 개발 환경
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+브라우저에서 아래 주소로 접속합니다.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```text
+http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 배포 전 체크
 
-## Learn More
+- `.env` 비밀값이 git에 올라가지 않는지 확인
+- Vercel 환경변수 점검
+- Supabase 연결 상태 확인
+- DB 초기화가 필요하면 아래 명령 실행
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run db:reset -- --force
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 제품 메모
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- 이 서비스는 `카카오톡을 대체`하는 것이 아니라 `카카오톡으로 하던 운영을 체계화`하는 데 목적이 있습니다.
+- 유료 전환 핵심 포인트는 참석 링크 자체보다 `운영 기록`, `회비 관리`, `출석 통계`, `총무 인사이트`입니다.

@@ -1,4 +1,5 @@
 export type DashboardTab =
+  | "stats"
   | "members"
   | "requests"
   | "fees"
@@ -109,6 +110,34 @@ export interface ClubInfo {
   customFieldLabel: string;
   adminEmail: string;
   pendingRequestCount: number;
+}
+
+export type DashboardStatsPeriodKey = "WEEK" | "MONTH";
+
+export interface DashboardStatsPeriod {
+  startDate: string | Date;
+  endDate: string | Date;
+  sessionCount: number;
+  registeredCount: number;
+  guestCount: number;
+  waitlistCount: number;
+  attendanceHandledCount: number;
+  newMembersCount: number;
+  unpaidMembersCount: number;
+}
+
+export interface DashboardTopMemberStat {
+  memberId: number;
+  name: string;
+  attendanceCount: number;
+  lateCount: number;
+  guestHostedCount: number;
+}
+
+export interface DashboardStats {
+  week: DashboardStatsPeriod;
+  month: DashboardStatsPeriod;
+  topMembers: DashboardTopMemberStat[];
 }
 
 export interface MemberFormState {

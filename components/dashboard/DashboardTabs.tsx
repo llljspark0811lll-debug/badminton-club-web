@@ -11,6 +11,7 @@ const tabs: Array<{
   label: string;
 }> = [
   { id: "members", label: "회원" },
+  { id: "stats", label: "통계" },
   { id: "requests", label: "가입 신청" },
   { id: "fees", label: "회비" },
   { id: "sessions", label: "운동 일정" },

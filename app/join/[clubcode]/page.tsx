@@ -61,7 +61,8 @@ export default function JoinPage() {
         if (data.name) {
           setClubConfig({
             name: data.name,
-            customFieldLabel: data.customFieldLabel ?? "차량번호",
+            customFieldLabel:
+              data.customFieldLabel ?? "차량번호",
             publicJoinToken: data.publicJoinToken ?? accessKey,
           });
         }
@@ -133,8 +134,9 @@ export default function JoinPage() {
         return;
       }
 
-      alert("가입 신청이 완료되었습니다.");
-      router.push("/");
+      router.push(
+        `/join/${clubConfig.publicJoinToken}/complete`
+      );
     } catch {
       alert("가입 신청 중 오류가 발생했습니다.");
     } finally {
