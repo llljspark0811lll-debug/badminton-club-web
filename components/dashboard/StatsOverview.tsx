@@ -107,9 +107,6 @@ export function StatsOverview({
     <section className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.22em] text-sky-600">
-            2차 로드맵
-          </p>
           <h2 className="mt-2 text-2xl font-black text-slate-900">
             주간/월간 운영 통계
           </h2>
