@@ -18,12 +18,32 @@ async function findClubMember(
   });
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const admin = await requireAuthAdmin();
 
     if (!admin) {
       return unauthorizedResponse();
+    }
+
+    const { searchParams } = new URL(req.url);
+    const scope = searchParams.get("scope");
+
+    if (scope === "fees") {
+      const feeMembers = await prisma.member.findMany({
+        where: {
+          clubId: admin.clubId,
+          deleted: false,
+        },
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+        },
+        orderBy: { name: "asc" },
+      });
+
+      return NextResponse.json(feeMembers);
     }
 
     const members = await prisma.member.findMany({

@@ -1,8 +1,8 @@
 import { memo, useMemo, useState } from "react";
-import type { Fee, Member } from "@/components/dashboard/types";
+import type { Fee, FeeMember } from "@/components/dashboard/types";
 
 type FeesTableProps = {
-  members: Member[];
+  members: FeeMember[];
   fees: Fee[];
   selectedYear: number;
   onChangeYear: (year: number) => void;
@@ -19,7 +19,7 @@ type FeesTableProps = {
 type FeeQuickFilter = "ALL" | "UNPAID" | "PAID";
 
 type FeeRowProps = {
-  member: Member;
+  member: FeeMember;
   monthStates: boolean[];
   selectedYear: number;
   onToggleFee: (

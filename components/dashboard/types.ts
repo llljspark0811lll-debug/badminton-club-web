@@ -29,6 +29,12 @@ export interface Member {
   fees?: Fee[];
 }
 
+export interface FeeMember {
+  id: number;
+  name: string;
+  phone: string;
+}
+
 export interface MemberRequest {
   id: number;
   name: string;

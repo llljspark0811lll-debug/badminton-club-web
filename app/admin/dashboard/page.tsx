@@ -20,6 +20,7 @@ import type {
   ClubSession,
   DashboardTab,
   Fee,
+  FeeMember,
   Member,
   MemberFormState,
   MemberRequest,
@@ -110,6 +111,7 @@ export default function DashboardPage() {
   const [sessions, setSessions] = useState<ClubSession[]>([]);
   const [specialFees, setSpecialFees] = useState<SpecialFee[]>([]);
   const [fees, setFees] = useState<Fee[]>([]);
+  const [feeMembers, setFeeMembers] = useState<FeeMember[]>([]);
   const [feesCache, setFeesCache] = useState<Record<number, Fee[]>>(
     {}
   );
@@ -149,7 +151,12 @@ export default function DashboardPage() {
   const [loadingSpecialFees, setLoadingSpecialFees] =
     useState(false);
   const [loadingMembers, setLoadingMembers] = useState(false);
+  const [loadingFeeMembers, setLoadingFeeMembers] =
+    useState(false);
   const [loadingRequests, setLoadingRequests] = useState(false);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+  const [feeMembersLoaded, setFeeMembersLoaded] =
+    useState(false);
 
   const paymentMode = getPaymentMode();
   const subscriptionAmount = getSubscriptionAmount();
@@ -184,8 +191,13 @@ export default function DashboardPage() {
   );
   const shouldShowInitialFeesLoading =
     activeTab === "fees" &&
-    ((loadingFees && !hasCachedFeesForSelectedYear) ||
+    ((loadingFeeMembers && !feeMembersLoaded) ||
+      (loadingFees && !hasCachedFeesForSelectedYear) ||
       (loadingSpecialFees && !specialFeesLoaded));
+  const shouldShowInitialSessionsLoading =
+    (activeTab === "sessions" || activeTab === "attendance") &&
+    loadingSessions &&
+    sessions.length === 0;
 
   async function refreshClubInfo() {
     const nextClubInfo = await requestJson<ClubInfo>("/api/club-info");
@@ -206,6 +218,19 @@ export default function DashboardPage() {
     }
   }
 
+  async function refreshFeeMembers() {
+    setLoadingFeeMembers(true);
+
+    try {
+      setFeeMembers(
+        await requestJson<FeeMember[]>("/api/members?scope=fees")
+      );
+      setFeeMembersLoaded(true);
+    } finally {
+      setLoadingFeeMembers(false);
+    }
+  }
+
   async function refreshRequests() {
     setLoadingRequests(true);
 
@@ -220,53 +245,59 @@ export default function DashboardPage() {
   }
 
   async function refreshSessions() {
-    const nextSessions = await requestJson<ClubSession[]>(
-      "/api/sessions"
-    );
+    setLoadingSessions(true);
 
-    const nextSelectedSessionId =
-      nextSessions.length === 0
-        ? null
-        : nextSessions.some(
-              (session) => session.id === selectedSessionId
-            )
-          ? selectedSessionId
-          : nextSessions[0].id;
-
-    let mergedSessions = nextSessions.map((session) => {
-      const existing = sessions.find(
-        (item) => item.id === session.id
+    try {
+      const nextSessions = await requestJson<ClubSession[]>(
+        "/api/sessions"
       );
 
-      return existing?.participants
-        ? { ...session, participants: existing.participants }
-        : session;
-    });
+      const nextSelectedSessionId =
+        nextSessions.length === 0
+          ? null
+          : nextSessions.some(
+                (session) => session.id === selectedSessionId
+              )
+            ? selectedSessionId
+            : nextSessions[0].id;
 
-    if (nextSelectedSessionId) {
-      const selectedSummary = mergedSessions.find(
-        (session) => session.id === nextSelectedSessionId
-      );
+      let mergedSessions = nextSessions.map((session) => {
+        const existing = sessions.find(
+          (item) => item.id === session.id
+        );
 
-      if (selectedSummary && !selectedSummary.participants) {
-        try {
-          const detail = await requestJson<ClubSession>(
-            `/api/sessions?id=${nextSelectedSessionId}`
-          );
+        return existing?.participants
+          ? { ...session, participants: existing.participants }
+          : session;
+      });
 
-          mergedSessions = mergedSessions.map((session) =>
-            session.id === nextSelectedSessionId
-              ? { ...session, ...detail }
-              : session
-          );
-        } catch {
-          // Ignore initial detail load failures on tab open.
+      if (nextSelectedSessionId) {
+        const selectedSummary = mergedSessions.find(
+          (session) => session.id === nextSelectedSessionId
+        );
+
+        if (selectedSummary && !selectedSummary.participants) {
+          try {
+            const detail = await requestJson<ClubSession>(
+              `/api/sessions?id=${nextSelectedSessionId}`
+            );
+
+            mergedSessions = mergedSessions.map((session) =>
+              session.id === nextSelectedSessionId
+                ? { ...session, ...detail }
+                : session
+            );
+          } catch {
+            // Ignore initial detail load failures on tab open.
+          }
         }
       }
-    }
 
-    setSessions(mergedSessions);
-    setSelectedSessionId(nextSelectedSessionId);
+      setSessions(mergedSessions);
+      setSelectedSessionId(nextSelectedSessionId);
+    } finally {
+      setLoadingSessions(false);
+    }
   }
 
   async function refreshSessionDetail(
@@ -464,7 +495,7 @@ export default function DashboardPage() {
     }
 
     Promise.all([
-      membersLoaded ? Promise.resolve() : refreshMembers(),
+      feeMembersLoaded ? Promise.resolve() : refreshFeeMembers(),
       refreshFees(selectedYear),
       specialFeesLoaded ? Promise.resolve() : refreshSpecialFees(),
     ]).catch((error: Error) => {
@@ -474,7 +505,7 @@ export default function DashboardPage() {
 
       alert(error.message);
     });
-  }, [activeTab, selectedYear, membersLoaded, specialFeesLoaded]);
+  }, [activeTab, selectedYear, feeMembersLoaded, specialFeesLoaded]);
 
   useEffect(() => {
     if (
@@ -765,6 +796,9 @@ export default function DashboardPage() {
     setEditingMember(null);
     setForm(initialForm);
     await refreshMembers();
+    if (feeMembersLoaded || activeTab === "fees") {
+      await refreshFeeMembers();
+    }
 
     if (!editingMember) {
       if (activeTab === "fees") {
@@ -784,6 +818,9 @@ export default function DashboardPage() {
     });
 
     await refreshMembers();
+    if (feeMembersLoaded || activeTab === "fees") {
+      await refreshFeeMembers();
+    }
   }
 
   async function handleRestore(id: number) {
@@ -797,6 +834,9 @@ export default function DashboardPage() {
     });
 
     await refreshMembers();
+    if (feeMembersLoaded || activeTab === "fees") {
+      await refreshFeeMembers();
+    }
   }
 
   async function handlePermanentDelete(id: number) {
@@ -814,6 +854,9 @@ export default function DashboardPage() {
     });
 
     await refreshMembers();
+    if (feeMembersLoaded || activeTab === "fees") {
+      await refreshFeeMembers();
+    }
   }
 
   async function toggleFee(
@@ -992,6 +1035,23 @@ export default function DashboardPage() {
 
       return [...withoutDuplicate, { ...result.member, fees: [] }];
       });
+      setFeeMembers((current) => {
+        const withoutDuplicate = current.filter(
+          (member) => member.id !== result.member.id
+        );
+
+        return [
+          ...withoutDuplicate,
+          {
+            id: result.member.id,
+            name: result.member.name,
+            phone: result.member.phone,
+          },
+        ].sort((left, right) =>
+          left.name.localeCompare(right.name, "ko")
+        );
+      });
+      setFeeMembersLoaded(true);
       setMembersLoaded(true);
       setActiveTab("members");
 
@@ -1392,7 +1452,7 @@ export default function DashboardPage() {
                 )
               : (
                 <FeesTable
-                  members={activeMembers}
+                  members={feeMembers}
                   fees={fees}
                   selectedYear={selectedYear}
                   onChangeYear={setSelectedYear}
@@ -1428,7 +1488,7 @@ export default function DashboardPage() {
                 />
               )}
             <SpecialFeesPanel
-              members={activeMembers}
+              members={feeMembers}
               specialFees={specialFees}
               selectedFeeId={selectedSpecialFeeId}
               loadingSelectedFee={loadingSpecialFeeDetail}
@@ -1441,6 +1501,11 @@ export default function DashboardPage() {
         ) : null}
 
         {activeTab === "sessions" ? (
+          shouldShowInitialSessionsLoading ? (
+            renderLoadingCard(
+              "운동 일정을 불러오는 중입니다."
+            )
+          ) : (
             <SessionsPanel
               sessions={sessions}
               selectedSessionId={selectedSessionId}
@@ -1451,16 +1516,23 @@ export default function DashboardPage() {
               onDeleteSession={handleDeleteSession}
               onUpdateSessionStatus={handleUpdateSessionStatus}
             />
+          )
         ) : null}
 
         {activeTab === "attendance" ? (
-          <AttendancePanel
-            sessions={sessions}
-            selectedSessionId={selectedSessionId}
-            loadingSelectedSession={loadingSessionDetail}
-            onSelectSession={handleSelectSession}
-            onUpdateAttendance={handleUpdateAttendance}
-          />
+          shouldShowInitialSessionsLoading ? (
+            renderLoadingCard(
+              "출석 일정을 불러오는 중입니다."
+            )
+          ) : (
+            <AttendancePanel
+              sessions={sessions}
+              selectedSessionId={selectedSessionId}
+              loadingSelectedSession={loadingSessionDetail}
+              onSelectSession={handleSelectSession}
+              onUpdateAttendance={handleUpdateAttendance}
+            />
+          )
         ) : null}
 
         {activeTab === "deleted" ? (

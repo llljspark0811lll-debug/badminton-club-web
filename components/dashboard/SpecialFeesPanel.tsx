@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type {
-  Member,
+  FeeMember,
   SpecialFee,
 } from "@/components/dashboard/types";
 import {
@@ -11,7 +11,7 @@ import {
 } from "@/components/dashboard/utils";
 
 type SpecialFeesPanelProps = {
-  members: Member[];
+  members: FeeMember[];
   specialFees: SpecialFee[];
   selectedFeeId: number | null;
   loadingSelectedFee: boolean;
