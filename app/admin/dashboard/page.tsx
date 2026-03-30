@@ -269,8 +269,15 @@ export default function DashboardPage() {
     setSelectedSessionId(nextSelectedSessionId);
   }
 
-  async function refreshSessionDetail(sessionId: number) {
-    setLoadingSessionDetail(true);
+  async function refreshSessionDetail(
+    sessionId: number,
+    options?: { silent?: boolean }
+  ) {
+    const silent = options?.silent ?? false;
+
+    if (!silent) {
+      setLoadingSessionDetail(true);
+    }
 
     try {
       const detail = await requestJson<ClubSession>(
@@ -288,7 +295,9 @@ export default function DashboardPage() {
         )
       );
     } finally {
-      setLoadingSessionDetail(false);
+      if (!silent) {
+        setLoadingSessionDetail(false);
+      }
     }
   }
 
@@ -585,6 +594,37 @@ export default function DashboardPage() {
       document.removeEventListener(
         "visibilitychange",
         handleVisibilityChange
+      );
+    };
+  }, [activeTab, selectedSessionId]);
+
+  useEffect(() => {
+    if (
+      (activeTab !== "sessions" &&
+        activeTab !== "attendance") ||
+      !selectedSessionId
+    ) {
+      return;
+    }
+
+    const refreshSelectedSessionDetail = () => {
+      void refreshSessionDetail(selectedSessionId, {
+        silent: true,
+      }).catch(() => undefined);
+    };
+
+    const interval = window.setInterval(
+      refreshSelectedSessionDetail,
+      4000
+    );
+
+    window.addEventListener("focus", refreshSelectedSessionDetail);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener(
+        "focus",
+        refreshSelectedSessionDetail
       );
     };
   }, [activeTab, selectedSessionId]);
