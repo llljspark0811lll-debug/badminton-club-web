@@ -164,7 +164,7 @@ export function SpecialFeesPanel({
                   title: event.target.value,
                 })
               }
-              placeholder="예: 봄철 대회 참가비"
+              placeholder="예: 단체유니폼비"
               className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-sky-400"
             />
             <input
