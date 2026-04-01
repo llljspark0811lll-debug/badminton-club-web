@@ -13,7 +13,7 @@ export default function Home() {
         <section className="grid w-full gap-4 lg:grid-cols-[1.25fr_420px] lg:gap-6">
           <div className="overflow-hidden rounded-[2rem] border border-white/80 bg-white/90 p-6 shadow-[0_30px_100px_rgba(15,23,42,0.12)] backdrop-blur sm:rounded-[2.5rem] sm:p-10 md:p-14">
             <div className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 sm:px-4 sm:text-xs">
-              Club Operations SaaS
+              Premium Club Operations
             </div>
 
             <div className="mt-8 space-y-4 sm:mt-10 sm:space-y-5">
@@ -28,9 +28,9 @@ export default function Home() {
               </h1>
 
               <p className="max-w-2xl text-sm leading-6 text-slate-500 md:text-base md:leading-7">
-                회원 관리부터 가입 승인, 운동 일정, 참석, 출석, 월회비, 수시회비까지.
-                <br className="hidden sm:block" />
-                총무가 카카오톡과 엑셀을 오가며 하던 운영을 한곳에서 정리하는
+                회원 관리부터 가입 승인, 운동 일정, 출석, 월회비, 수시회비까지.
+                <br />
+                총무가 카카오톡과 엑셀을 오가며 하던 운영을 한 곳에서 정리하는
                 <br className="hidden sm:block" />
                 배드민턴 클럽 운영 프로그램입니다.
               </p>
@@ -54,15 +54,15 @@ export default function Home() {
             <div className="mt-6 grid gap-2 sm:mt-8 sm:hidden">
               <div className="rounded-2xl border border-slate-200 bg-slate-50/90 px-4 py-3">
                 <p className="text-sm font-bold text-slate-900">회원 · 승인 · 탈퇴</p>
-                <p className="mt-1 text-sm text-slate-500">신규 가입부터 회원 상태 관리까지 한 번에 정리합니다.</p>
+                <p className="mt-1 text-sm text-slate-500">신규 가입부터 회원 상태 관리까지 한 번에 정리</p>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50/90 px-4 py-3">
                 <p className="text-sm font-bold text-slate-900">일정 · 참석 · 게스트</p>
-                <p className="mt-1 text-sm text-slate-500">링크 하나로 참석 명단과 대기 인원까지 관리합니다.</p>
+                <p className="mt-1 text-sm text-slate-500">링크 하나로 참석 명단과 대기 인원까지 관리</p>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50/90 px-4 py-3">
                 <p className="text-sm font-bold text-slate-900">월회비 · 수시회비</p>
-                <p className="mt-1 text-sm text-slate-500">정기 회비와 일회성 회비를 나눠 정확하게 관리합니다.</p>
+                <p className="mt-1 text-sm text-slate-500">정기 회비와 일회성 회비를 나눠 정확하게 관리</p>
               </div>
             </div>
 
@@ -84,7 +84,7 @@ export default function Home() {
                   Session
                 </p>
                 <p className="mt-3 text-base font-bold text-slate-900">
-                  일정 · 참석 · 게스트
+                  일정 · 출석 · 게스트
                 </p>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
                   링크 하나로 참석 명단과 대기 인원까지 자연스럽게 관리합니다.
