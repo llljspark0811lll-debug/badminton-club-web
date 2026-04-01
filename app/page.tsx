@@ -30,9 +30,7 @@ export default function Home() {
               <p className="max-w-2xl text-sm leading-6 text-slate-500 md:text-base md:leading-7">
                 회원 관리부터 가입 승인, 운동 일정, 출석, 월회비, 수시회비까지.
                 <br />
-                총무가 카카오톡과 엑셀을 오가며 하던 운영을 한 곳에서 정리하는
-                <br className="hidden sm:block" />
-                배드민턴 클럽 운영 프로그램입니다.
+                총무가 카카오톡과 엑셀을 오가며 하던 운영을 한 곳에서 정리하는 배드민턴 클럽 운영 프로그램입니다.
               </p>
             </div>
 
