@@ -12,7 +12,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const siteTitle = "배드민턴 클럽 운영 관리 프로그램";
+const siteTitle = "전국 배드민턴 클럽 운영 관리 프로그램";
 
 function getMetadataBase() {
   const configuredUrl =
