@@ -12,7 +12,8 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const siteTitle = "전국 배드민턴 클럽 운영 관리 프로그램";
+const siteTitle = "콕매니저🏸";
+const siteDescription = "전국 배드민턴 클럽 운영 관리 프로그램";
 
 function getMetadataBase() {
   const configuredUrl =
@@ -32,18 +33,18 @@ function getMetadataBase() {
 export const metadata: Metadata = {
   metadataBase: getMetadataBase(),
   title: siteTitle,
-  description: "",
+  description: siteDescription,
   applicationName: siteTitle,
   openGraph: {
     type: "website",
     locale: "ko_KR",
     title: siteTitle,
-    description: "",
+    description: siteDescription,
   },
   twitter: {
     card: "summary",
     title: siteTitle,
-    description: "",
+    description: siteDescription,
   },
   icons: {
     icon: "/favicon.ico",
