@@ -10,6 +10,7 @@ import { StatsOverview } from "@/components/dashboard/StatsOverview";
 import { DashboardTabs } from "@/components/dashboard/DashboardTabs";
 import { DeletedMembersTable } from "@/components/dashboard/DeletedMembersTable";
 import { FeesTable } from "@/components/dashboard/FeesTable";
+import { JoinRequestLinkPanel } from "@/components/dashboard/JoinRequestLinkPanel";
 import { MemberFormModal } from "@/components/dashboard/MemberFormModal";
 import { MembersTable } from "@/components/dashboard/MembersTable";
 import { RequestsTable } from "@/components/dashboard/RequestsTable";
@@ -1459,7 +1460,6 @@ export default function DashboardPage() {
               adminEmail={clubInfo?.adminEmail ?? ""}
               adminEmailDraft={adminEmailDraft}
               saving={savingClubSettings}
-              joinLink={publicJoinLink}
               onChangeDraft={(value) => {
                 setCustomFieldLabelDraft(value);
                 setCustomFieldLabelDirty(true);
@@ -1479,7 +1479,9 @@ export default function DashboardPage() {
         ) : null}
 
         {activeTab === "requests" ? (
-          <RequestsTable
+          <div className="space-y-6">
+            <JoinRequestLinkPanel joinLink={publicJoinLink} />
+            <RequestsTable
             requests={requests}
             customFieldLabel={
               clubInfo?.customFieldLabel ?? "차량번호"
@@ -1495,7 +1497,8 @@ export default function DashboardPage() {
                 alert(error.message);
               });
             }}
-          />
+            />
+          </div>
         ) : null}
 
         {activeTab === "fees" ? (
