@@ -57,6 +57,14 @@ export function DashboardTutorial({
         `[data-tutorial-id="${step.targetId}"]`
       ) as HTMLElement | null;
 
+      if (element) {
+        element.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+          inline: "center",
+        });
+      }
+
       setTargetRect(element?.getBoundingClientRect() ?? null);
     };
 
