@@ -1,653 +1,822 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 
-type PublicSession = {
+type Participant = {
+  id: number;
+  type: "MEMBER" | "GUEST";
+  name: string;
+  age: number | null;
+  gender: string | null;
+  level: string | null;
+};
+
+type SessionData = {
+  id: number;
+  publicToken: string;
   title: string;
-  description: string;
-  location: string;
+  description: string | null;
+  location: string | null;
   date: string;
   startTime: string;
   endTime: string;
   capacity: number | null;
-  status: "OPEN" | "CLOSED" | "CANCELED";
+  status: string;
   clubName: string;
-  joinToken: string;
+  joinToken: string | null;
   registeredCount: number;
   waitlistCount: number;
-  participantNames: string[];
+  registeredMemberCount: number;
+  registeredGuestCount: number;
+  waitlistMemberCount: number;
+  waitlistGuestCount: number;
+  registeredParticipants: Participant[];
+  waitlistedParticipants: Participant[];
+};
+
+type GuestDraft = {
+  name: string;
+  age: string;
+  gender: string;
+  level: string;
 };
 
 type IdentifiedMember = {
   id: number;
   name: string;
-  currentStatus: "REGISTERED" | "WAITLIST" | "CANCELED" | "NONE";
-  rememberToken: string;
-  guestNames: string[];
+  currentStatus: "NONE" | "REGISTERED" | "WAITLIST" | "CANCELED";
+  guests: GuestDraft[];
 };
+
+type BoardGroup = {
+  genderLabel: string;
+  genderKey: "남" | "여" | "기타";
+  participants: Participant[];
+  levels: Array<{
+    level: string;
+    participants: Participant[];
+  }>;
+};
+
+const LEVELS = ["S", "A", "B", "C", "D", "E", "초심"];
+const GENDERS = ["남", "여"];
+const MAX_GUESTS = 5;
+
+function emptyGuest(): GuestDraft {
+  return { name: "", age: "", gender: "", level: "" };
+}
+
+function storageKey(token: string) {
+  return `public-session-member:${token}`;
+}
 
 function formatDate(value: string) {
   const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "-";
-  }
-
-  return date.toLocaleDateString("ko-KR");
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("ko-KR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "short",
+  });
 }
 
-function getStatusLabel(status: IdentifiedMember["currentStatus"]) {
-  if (status === "REGISTERED") return "현재 참석 신청 상태";
-  if (status === "WAITLIST") return "현재 대기 신청 상태";
-  if (status === "CANCELED") return "현재 참석 취소 상태";
-  return "아직 참석 신청 전";
+function normalizeGender(value: string | null | undefined) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (["남", "남자", "m", "male"].includes(normalized)) return "남";
+  if (["여", "여자", "f", "female"].includes(normalized)) return "여";
+  return "기타";
 }
 
-const PHONE_LAST4_PLACEHOLDER = "전화번호 뒤 4자리";
-const MAX_GUEST_COUNT = 5;
+function normalizeLevel(value: string | null | undefined) {
+  const normalized = String(value ?? "").trim().toUpperCase();
+  return normalized || "미정";
+}
+
+function levelRank(level: string) {
+  const index = LEVELS.indexOf(level);
+  return index === -1 ? LEVELS.length : index;
+}
+
+function compareParticipants(left: Participant, right: Participant) {
+  const diff =
+    levelRank(normalizeLevel(left.level)) - levelRank(normalizeLevel(right.level));
+  if (diff !== 0) return diff;
+  return left.name.localeCompare(right.name, "ko");
+}
+
+function buildBoard(participants: Participant[]): BoardGroup[] {
+  const sorted = [...participants].sort(compareParticipants);
+  const genders: Array<"남" | "여" | "기타"> = ["남", "여", "기타"];
+
+  return genders
+    .map((genderKey) => {
+      const sameGender = sorted.filter(
+        (participant) => normalizeGender(participant.gender) === genderKey
+      );
+      if (sameGender.length === 0) return null;
+
+      const levels = [...new Set(sameGender.map((item) => normalizeLevel(item.level)))]
+        .sort((a, b) => levelRank(a) - levelRank(b))
+        .map((level) => ({
+          level,
+          participants: sameGender.filter(
+            (participant) => normalizeLevel(participant.level) === level
+          ),
+        }));
+
+      return {
+        genderLabel: genderKey === "기타" ? "기타/미정" : genderKey,
+        genderKey,
+        participants: sameGender,
+        levels,
+      };
+    })
+    .filter((group): group is BoardGroup => Boolean(group));
+}
+
+function genderBadgeClass(gender: string | null | undefined) {
+  const normalized = normalizeGender(gender);
+  if (normalized === "남") return "border-sky-200 bg-sky-50 text-sky-700";
+  if (normalized === "여") return "border-rose-200 bg-rose-50 text-rose-700";
+  return "border-slate-200 bg-slate-50 text-slate-600";
+}
+
+function levelChipClass(level: string | null | undefined) {
+  const normalized = normalizeLevel(level);
+  if (normalized === "S") return "bg-amber-50 text-amber-700";
+  if (normalized === "A") return "bg-emerald-50 text-emerald-700";
+  if (normalized === "B") return "bg-violet-50 text-violet-700";
+  if (normalized === "C") return "bg-orange-50 text-orange-700";
+  if (normalized === "D") return "bg-lime-50 text-lime-700";
+  if (normalized === "E") return "bg-slate-100 text-slate-700";
+  if (normalized === "초심") return "bg-cyan-50 text-cyan-700";
+  return "bg-slate-100 text-slate-600";
+}
+
+function StatChip({
+  label,
+  accent = "default",
+}: {
+  label: string;
+  accent?: "default" | "male" | "female" | "level";
+}) {
+  const classes =
+    accent === "male"
+      ? "bg-sky-50 text-sky-700"
+      : accent === "female"
+      ? "bg-rose-50 text-rose-700"
+      : accent === "level"
+      ? "bg-violet-50 text-violet-700"
+      : "bg-slate-100 text-slate-700";
+
+  return (
+    <div className={`rounded-full px-4 py-2 text-sm font-bold ${classes}`}>
+      {label}
+    </div>
+  );
+}
+
+function ParticipantCard({ participant }: { participant: Participant }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-black text-slate-900">{participant.name}</div>
+          <div className="mt-1 text-xs text-slate-500">
+            {participant.type === "GUEST"
+              ? `${participant.age ? `${participant.age}세` : "나이 미정"} · 게스트`
+              : "회원"}
+          </div>
+        </div>
+        <div className="flex flex-wrap justify-end gap-2">
+          <span
+            className={`rounded-full border px-2.5 py-1 text-xs font-bold ${genderBadgeClass(
+              participant.gender
+            )}`}
+          >
+            {normalizeGender(participant.gender)}
+          </span>
+          <span
+            className={`rounded-full px-2.5 py-1 text-xs font-bold ${levelChipClass(
+              participant.level
+            )}`}
+          >
+            {normalizeLevel(participant.level)}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ParticipantSummary({
+  participants,
+}: {
+  participants: Participant[];
+}) {
+  const male = participants.filter(
+    (participant) => normalizeGender(participant.gender) === "남"
+  ).length;
+  const female = participants.filter(
+    (participant) => normalizeGender(participant.gender) === "여"
+  ).length;
+  const levels = LEVELS.map((level) => ({
+    level,
+    count: participants.filter(
+      (participant) => normalizeLevel(participant.level) === level
+    ).length,
+  })).filter((item) => item.count > 0);
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      <StatChip label={`전체 ${participants.length}명`} />
+      <StatChip label={`남자 ${male}명`} accent="male" />
+      <StatChip label={`여자 ${female}명`} accent="female" />
+      {levels.map((item) => (
+        <StatChip
+          key={item.level}
+          label={`${item.level} ${item.count}명`}
+          accent="level"
+        />
+      ))}
+    </div>
+  );
+}
+
+function ParticipantGroups({
+  title,
+  participants,
+  emptyMessage,
+}: {
+  title: string;
+  participants: Participant[];
+  emptyMessage: string;
+}) {
+  const groups = useMemo(() => buildBoard(participants), [participants]);
+
+  return (
+    <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+      <h3 className="text-2xl font-black text-slate-900">{title}</h3>
+      <p className="mt-2 text-sm leading-6 text-slate-500">
+        남/여 구분 후 급수 순으로 자동 정렬됩니다.
+      </p>
+      <div className="mt-5">
+        <ParticipantSummary participants={participants} />
+      </div>
+
+      {participants.length === 0 ? (
+        <div className="mt-6 rounded-[1.5rem] border border-dashed border-slate-200 bg-slate-50 px-5 py-10 text-center text-sm text-slate-400">
+          {emptyMessage}
+        </div>
+      ) : (
+        <div className="mt-6 space-y-5">
+          {groups.map((group) => (
+            <div
+              key={group.genderKey}
+              className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4 sm:p-5"
+            >
+              <div className="flex items-center gap-2">
+                <span
+                  className={`rounded-full border px-3 py-1 text-sm font-bold ${genderBadgeClass(
+                    group.genderKey
+                  )}`}
+                >
+                  {group.genderLabel}
+                </span>
+                <span className="text-sm font-semibold text-slate-500">
+                  {group.participants.length}명
+                </span>
+              </div>
+
+              <div className="mt-4 space-y-4">
+                {group.levels.map((levelGroup) => (
+                  <div key={`${group.genderKey}-${levelGroup.level}`}>
+                    <div className="mb-3 inline-flex rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-600 shadow-sm">
+                      {levelGroup.level}
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                      {levelGroup.participants.map((participant) => (
+                        <ParticipantCard
+                          key={`${title}-${participant.id}`}
+                          participant={participant}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
 
 export default function PublicSessionPage() {
   const params = useParams();
-  const token =
-    typeof params.token === "string"
-      ? params.token
-      : params.token?.[0];
+  const token = String(params?.token ?? "");
 
-  const [session, setSession] = useState<PublicSession | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [identityLoading, setIdentityLoading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-  const [identifiedMember, setIdentifiedMember] =
-    useState<IdentifiedMember | null>(null);
-  const [identityForm, setIdentityForm] = useState({
-    name: "",
-    phoneLast4: "",
-  });
-  const [guestNames, setGuestNames] = useState<string[]>([]);
+  const [session, setSession] = useState<SessionData | null>(null);
+  const [loadingSession, setLoadingSession] = useState(true);
+  const [sessionError, setSessionError] = useState("");
+  const [memberName, setMemberName] = useState("");
+  const [phoneLast4, setPhoneLast4] = useState("");
+  const [identifiedMember, setIdentifiedMember] = useState<IdentifiedMember | null>(
+    null
+  );
+  const [identifyLoading, setIdentifyLoading] = useState(false);
+  const [identifyError, setIdentifyError] = useState("");
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const [submitSuccessMessage, setSubmitSuccessMessage] = useState("");
 
-  async function loadSession() {
-    if (!token) {
-      setError("잘못된 일정 링크입니다.");
-      setLoading(false);
-      return;
-    }
+  const rememberStorageKey = storageKey(token);
 
-    setLoading(true);
-    setError("");
-
-    const response = await fetch(`/api/public/sessions/${token}`);
-    const data = await response.json();
-
-    if (!response.ok) {
-      setError(
-        data.error ?? "운동 일정 정보를 불러오지 못했습니다."
-      );
-      setSession(null);
-      setLoading(false);
-      return;
-    }
-
-    setSession(data);
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    loadSession().catch(() => {
-      setError("운동 일정 정보를 불러오지 못했습니다.");
-      setLoading(false);
-    });
-  }, [token]);
-
-  const joinLink = useMemo(() => {
-    if (!session?.joinToken) {
-      return null;
-    }
-
-    return `/join/${session.joinToken}`;
-  }, [session?.joinToken]);
-
-  const rememberStorageKey = useMemo(() => {
-    if (!session?.joinToken) {
-      return null;
-    }
-
-    return `public-session-member:${session.joinToken}`;
-  }, [session?.joinToken]);
-
-  useEffect(() => {
-    async function tryAutoIdentify() {
-      if (!token || !rememberStorageKey) {
-        return;
-      }
-
-      const rememberToken =
-        window.localStorage.getItem(rememberStorageKey) ?? "";
-
-      if (!rememberToken) {
-        return;
-      }
-
-      setIdentityLoading(true);
-
-      try {
-        const response = await fetch(
-          "/api/public/sessions/identify",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              token,
-              rememberToken,
-            }),
-          }
-        );
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          window.localStorage.removeItem(rememberStorageKey);
-          setIdentifiedMember(null);
-          return;
-        }
-
-        setIdentifiedMember({
-          ...data.member,
-          rememberToken: data.rememberToken,
-        });
-        setGuestNames(data.member.guestNames ?? []);
-        setMessage(
-          `${data.member.name}님으로 자동 인식되었습니다.`
-        );
-      } catch {
-        window.localStorage.removeItem(rememberStorageKey);
-        setIdentifiedMember(null);
-      } finally {
-        setIdentityLoading(false);
-      }
-    }
-
-    tryAutoIdentify().catch(() => {
-      setIdentityLoading(false);
-    });
-  }, [rememberStorageKey, token]);
-
-  async function handleIdentify() {
-    if (!token) {
-      return;
-    }
-
-    if (
-      !identityForm.name.trim() ||
-      identityForm.phoneLast4.replace(/\D/g, "").length !== 4
-    ) {
-      setError("이름과 전화번호 뒤 4자리를 입력해주세요.");
-      return;
-    }
-
-    setIdentityLoading(true);
-    setError("");
-    setMessage("");
-
+  async function fetchSessionData() {
+    if (!token) return;
     try {
-      const response = await fetch(
-        "/api/public/sessions/identify",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            token,
-            name: identityForm.name,
-            phoneLast4: identityForm.phoneLast4,
-          }),
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(
-          data.error ?? "회원 정보를 확인하지 못했습니다."
-        );
-        return;
-      }
-
-      if (rememberStorageKey) {
-        window.localStorage.setItem(
-          rememberStorageKey,
-          data.rememberToken
-        );
-      }
-
-      setIdentifiedMember({
-        ...data.member,
-        rememberToken: data.rememberToken,
+      setSessionError("");
+      const response = await fetch(`/api/public/sessions/${token}`, {
+        cache: "no-store",
       });
-      setGuestNames(data.member.guestNames ?? []);
-      setMessage(
-        `${data.member.name}님 확인이 완료되었습니다. 다음부터는 이 기기에서 자동으로 인식됩니다.`
-      );
-    } catch {
-      setError("회원 확인 처리 중 오류가 발생했습니다.");
-    } finally {
-      setIdentityLoading(false);
-    }
-  }
-
-  function clearRememberedMember() {
-    if (rememberStorageKey) {
-      window.localStorage.removeItem(rememberStorageKey);
-    }
-
-    setIdentifiedMember(null);
-    setGuestNames([]);
-    setMessage("");
-    setIdentityForm({
-      name: "",
-      phoneLast4: "",
-    });
-  }
-
-  function updateGuestName(index: number, value: string) {
-    setGuestNames((current) =>
-      current.map((guestName, currentIndex) =>
-        currentIndex === index ? value : guestName
-      )
-    );
-  }
-
-  function addGuestField() {
-    setGuestNames((current) => {
-      if (current.length >= MAX_GUEST_COUNT) {
-        return current;
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "운동 일정 정보를 불러오지 못했습니다.");
       }
-
-      return [...current, ""];
-    });
+      setSession(data);
+    } catch (error) {
+      setSessionError(
+        error instanceof Error
+          ? error.message
+          : "운동 일정 정보를 불러오지 못했습니다."
+      );
+    } finally {
+      setLoadingSession(false);
+    }
   }
 
-  function removeGuestField(index: number) {
-    setGuestNames((current) =>
-      current.filter((_, currentIndex) => currentIndex !== index)
-    );
-  }
+  async function identifyMember(options?: {
+    rememberToken?: string;
+    silent?: boolean;
+  }) {
+    if (!token) return;
+    const rememberToken = options?.rememberToken ?? "";
 
-  async function handleRespond(action: "REGISTER" | "CANCEL") {
-    if (!token || !identifiedMember) {
-      setError("먼저 회원 확인을 진행해주세요.");
+    if (!rememberToken && (!memberName.trim() || phoneLast4.length !== 4)) {
+      if (!options?.silent) {
+        setIdentifyError("이름과 전화번호 뒤 4자리를 입력해주세요.");
+      }
       return;
     }
 
-    setSubmitting(true);
-    setError("");
-    setMessage("");
-
-    const nextGuestNames = guestNames
-      .map((guestName) => guestName.trim())
-      .filter(Boolean)
-      .slice(0, MAX_GUEST_COUNT);
-
     try {
-      const response = await fetch("/api/public/sessions/respond", {
+      setIdentifyLoading(true);
+      if (!options?.silent) {
+        setIdentifyError("");
+        setSubmitSuccessMessage("");
+      }
+
+      const response = await fetch("/api/public/sessions/identify", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           token,
-          action,
-          rememberToken: identifiedMember.rememberToken,
-          guestNames: nextGuestNames,
+          rememberToken,
+          name: memberName.trim(),
+          phoneLast4,
         }),
       });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "회원 확인에 실패했습니다.");
+      }
 
+      localStorage.setItem(rememberStorageKey, data.rememberToken);
+      setIdentifiedMember((previous) => {
+        if (!options?.silent || !previous) {
+          return data.member;
+        }
+
+        const hasUnsavedGuestDraft = previous.guests.some(
+          (guest) => guest.name || guest.age || guest.gender || guest.level
+        );
+
+        return hasUnsavedGuestDraft
+          ? { ...data.member, guests: previous.guests }
+          : data.member;
+      });
+      setIdentifyError("");
+    } catch (error) {
+      if (!options?.silent) {
+        setIdentifyError(
+          error instanceof Error ? error.message : "회원 확인에 실패했습니다."
+        );
+      }
+      localStorage.removeItem(rememberStorageKey);
+      setIdentifiedMember(null);
+    } finally {
+      setIdentifyLoading(false);
+    }
+  }
+
+  async function refreshIdentifiedMember() {
+    if (!token) return;
+    const rememberToken = localStorage.getItem(rememberStorageKey);
+    if (!rememberToken) return;
+
+    await identifyMember({
+      rememberToken,
+      silent: true,
+    });
+  }
+
+  useEffect(() => {
+    fetchSessionData().catch(() => undefined);
+
+    const rememberToken = localStorage.getItem(rememberStorageKey);
+    if (rememberToken) {
+      identifyMember({
+        rememberToken,
+        silent: true,
+      }).catch(() => undefined);
+    }
+  }, [rememberStorageKey, token]);
+
+  useEffect(() => {
+    if (!token) return;
+
+    const interval = window.setInterval(() => {
+      fetchSessionData().catch(() => undefined);
+    }, 5000);
+
+    const handleFocus = () => {
+      fetchSessionData().catch(() => undefined);
+    };
+
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [rememberStorageKey, token]);
+
+  async function handleRespond(action: "REGISTER" | "CANCEL") {
+    if (!identifiedMember) return;
+
+    try {
+      setSubmitLoading(true);
+      setSubmitSuccessMessage("");
+      const rememberToken = localStorage.getItem(rememberStorageKey);
+
+      if (!rememberToken) {
+        throw new Error("회원 자동 인식 정보가 없습니다. 다시 확인해주세요.");
+      }
+
+      const guests =
+        action === "REGISTER"
+          ? identifiedMember.guests
+              .map((guest) => ({
+                name: guest.name.trim(),
+                age: guest.age.trim(),
+                gender: guest.gender.trim(),
+                level: guest.level.trim(),
+              }))
+              .filter((guest) => guest.name)
+          : [];
+
+      const response = await fetch("/api/public/sessions/respond", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          rememberToken,
+          action,
+          guests,
+        }),
+      });
       const data = await response.json();
 
       if (!response.ok) {
-        setError(
-          data.error ?? "참석 응답을 처리하지 못했습니다."
-        );
-
-        if (response.status === 401) {
-          clearRememberedMember();
-        }
-        return;
+        throw new Error(data.error || "참석 정보를 처리하지 못했습니다.");
       }
 
-      const nextStatus =
-        data.status === "REGISTERED"
-          ? "REGISTERED"
-          : data.status === "WAITLIST"
-            ? "WAITLIST"
-            : "CANCELED";
-
-      setIdentifiedMember((current) =>
-        current
-          ? {
-              ...current,
-              currentStatus: nextStatus,
-              guestNames: nextGuestNames,
-            }
-          : current
+      setIdentifiedMember((previous) =>
+        previous ? { ...previous, currentStatus: data.status } : previous
       );
-      setGuestNames(nextGuestNames);
 
-      if (data.status === "WAITLIST") {
-        setMessage(
-          nextGuestNames.length > 0
-            ? `대기 신청으로 등록되었습니다. 게스트 ${data.waitlistGuestCount ?? 0}명도 함께 처리되었어요.`
-            : "정원이 가득 차서 대기 신청으로 등록되었습니다."
-        );
-      } else if (data.status === "REGISTERED") {
-        setMessage(
-          nextGuestNames.length > 0
-            ? `참석 신청이 완료되었습니다. 게스트 ${nextGuestNames.length}명도 함께 저장되었어요.`
-            : "참석 신청이 완료되었습니다."
-        );
-      } else {
-        setMessage("참석 취소가 완료되었습니다.");
-      }
+      await Promise.all([fetchSessionData(), refreshIdentifiedMember()]);
 
-      await loadSession();
-    } catch {
-      setError("참석 응답을 처리하지 못했습니다.");
+      const successMessage =
+        action === "CANCEL"
+          ? "참석 취소가 완료되었습니다."
+          : data.status === "WAITLIST"
+            ? "참석 신청이 완료되었습니다. 현재 대기 인원으로 등록되었습니다."
+            : "참석 신청이 완료되었습니다.";
+
+      setSubmitSuccessMessage(successMessage);
+    } catch (error) {
+      setSubmitSuccessMessage("");
+      alert(
+        error instanceof Error ? error.message : "참석 정보를 처리하지 못했습니다."
+      );
     } finally {
-      setSubmitting(false);
+      setSubmitLoading(false);
     }
+  }
+
+  const registeredMembers = useMemo(
+    () =>
+      (session?.registeredParticipants ?? []).filter(
+        (participant) => participant.type === "MEMBER"
+      ),
+    [session]
+  );
+  const registeredGuests = useMemo(
+    () =>
+      (session?.registeredParticipants ?? []).filter(
+        (participant) => participant.type === "GUEST"
+      ),
+    [session]
+  );
+  const waitlistedMembers = useMemo(
+    () =>
+      (session?.waitlistedParticipants ?? []).filter(
+        (participant) => participant.type === "MEMBER"
+      ),
+    [session]
+  );
+  const waitlistedGuests = useMemo(
+    () =>
+      (session?.waitlistedParticipants ?? []).filter(
+        (participant) => participant.type === "GUEST"
+      ),
+    [session]
+  );
+
+  const statusLabel =
+    identifiedMember?.currentStatus === "REGISTERED"
+      ? "현재 참석 신청이 완료된 상태입니다."
+      : identifiedMember?.currentStatus === "WAITLIST"
+      ? "현재 대기 인원으로 등록되어 있습니다."
+      : "아직 참석 신청 전입니다.";
+
+  if (loadingSession) {
+    return (
+      <main className="min-h-screen bg-slate-100 px-4 py-10">
+        <div className="mx-auto max-w-6xl rounded-[2rem] border border-slate-200 bg-white px-6 py-20 text-center text-sm text-slate-400 shadow-sm sm:px-10">
+          운동 현황판을 불러오는 중입니다.
+        </div>
+      </main>
+    );
+  }
+
+  if (!session) {
+    return (
+      <main className="min-h-screen bg-slate-100 px-4 py-10">
+        <div className="mx-auto max-w-4xl rounded-[2rem] border border-slate-200 bg-white px-6 py-20 text-center shadow-sm sm:px-10">
+          <h1 className="text-2xl font-black text-slate-900">
+            운동 일정 링크를 확인해주세요
+          </h1>
+          <p className="mt-4 text-sm leading-6 text-slate-500">
+            {sessionError || "운동 일정 정보를 불러오지 못했습니다."}
+          </p>
+        </div>
+      </main>
+    );
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 px-4 py-10">
-      <div className="mx-auto max-w-2xl rounded-[2rem] bg-white p-6 shadow-xl">
-        {loading ? (
-          <div className="py-20 text-center text-sm text-slate-500">
-            운동 일정 정보를 불러오는 중입니다...
-          </div>
-        ) : null}
-
-        {!loading && session ? (
-          <div className="space-y-6">
-            <div className="border-b border-slate-200 pb-5">
-              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-sky-600">
+    <main className="min-h-screen bg-slate-100 px-4 py-8 sm:px-6 sm:py-10">
+      <div className="mx-auto max-w-6xl space-y-6">
+        <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-3xl">
+              <p className="text-sm font-bold tracking-[0.2em] text-sky-600">
                 {session.clubName}
               </p>
-              <h1 className="mt-2 text-3xl font-black text-slate-900">
+              <h1 className="mt-3 text-3xl font-black text-slate-900 sm:text-4xl">
                 {session.title}
               </h1>
-              <p className="mt-3 text-sm text-slate-500">
-                {formatDate(session.date)} {session.startTime} -{" "}
-                {session.endTime}
-                {session.location ? ` | ${session.location}` : ""}
+              <p className="mt-4 text-sm leading-7 text-slate-500 sm:text-base">
+                {formatDate(session.date)} · {session.startTime} - {session.endTime}
+                {session.location ? ` · ${session.location}` : ""}
               </p>
-              <p className="mt-2 text-sm leading-6 text-slate-500">
-                {session.description || "설명 없음"}
+              {session.description ? (
+                <p className="mt-3 text-sm leading-7 text-slate-500 sm:text-base">
+                  {session.description}
+                </p>
+              ) : null}
+              <p className="mt-3 text-xs font-semibold text-slate-400">
+                마지막 업데이트는 5초마다 자동 반영됩니다.
               </p>
             </div>
-
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="rounded-2xl bg-slate-50 p-4">
-                <p className="text-sm font-semibold text-slate-500">
-                  정원
-                </p>
-                <p className="mt-2 text-2xl font-black text-slate-900">
-                  {session.capacity ?? "제한 없음"}
-                </p>
-              </div>
-              <div className="rounded-2xl bg-slate-50 p-4">
-                <p className="text-sm font-semibold text-slate-500">
-                  참석 인원
-                </p>
-                <p className="mt-2 text-2xl font-black text-slate-900">
-                  {session.registeredCount}
-                </p>
-              </div>
-              <div className="rounded-2xl bg-slate-50 p-4">
-                <p className="text-sm font-semibold text-slate-500">
-                  대기 인원
-                </p>
-                <p className="mt-2 text-2xl font-black text-slate-900">
-                  {session.waitlistCount}
-                </p>
+            <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-600">
+              <div className="font-bold text-slate-900">현재 참석 요약</div>
+              <div className="mt-2 space-y-1">
+                <div>참석 {session.registeredCount}명</div>
+                <div>회원 {session.registeredMemberCount}명</div>
+                <div>게스트 {session.registeredGuestCount}명</div>
+                <div>대기 {session.waitlistCount}명</div>
+                <div>정원 {session.capacity === null ? "제한 없음" : `${session.capacity}명`}</div>
               </div>
             </div>
+          </div>
+          <div className="mt-6 flex flex-wrap gap-2">
+            <StatChip label={`참석 ${session.registeredCount}명`} />
+            <StatChip label={`회원 ${session.registeredMemberCount}명`} accent="male" />
+            <StatChip label={`게스트 ${session.registeredGuestCount}명`} accent="female" />
+            <StatChip label={`대기 ${session.waitlistCount}명`} accent="level" />
+          </div>
+        </section>
 
-            <div className="rounded-[1.5rem] border border-slate-200 p-5">
-              <h2 className="text-xl font-black text-slate-900">
-                참석 응답
-              </h2>
+        <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+          <div className="flex flex-col gap-6 lg:flex-row">
+            <div className="flex-1">
+              <h2 className="text-2xl font-black text-slate-900">참석 신청 / 취소</h2>
+              <p className="mt-3 text-sm leading-6 text-slate-500">
+                처음 한 번만 이름과 전화번호 뒤 4자리로 본인 확인을 하면, 이후에는 같은 기기에서 자동으로 기억됩니다.
+              </p>
 
               {!identifiedMember ? (
-                <>
-                  <p className="mt-2 text-sm text-slate-500">
-                    처음 한 번만 이름과 전화번호 뒤 4자리를 입력하면,
-                    다음부터는 이 기기에서 자동으로 인식됩니다.
-                  </p>
-
-                  <div className="mt-4 space-y-3">
-                    <input
-                      value={identityForm.name}
-                      onChange={(event) =>
-                        setIdentityForm((current) => ({
-                          ...current,
-                          name: event.target.value,
-                        }))
-                      }
-                      placeholder="이름"
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-sky-400"
-                    />
-                    <input
-                      value={identityForm.phoneLast4}
-                      onChange={(event) =>
-                        setIdentityForm((current) => ({
-                          ...current,
-                          phoneLast4: event.target.value
-                            .replace(/\D/g, "")
-                            .slice(0, 4),
-                        }))
-                      }
-                      placeholder={PHONE_LAST4_PLACEHOLDER}
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-sky-400"
-                    />
-                  </div>
-
+                <div className="mt-6 space-y-3">
+                  <input
+                    value={memberName}
+                    onChange={(event) => setMemberName(event.target.value)}
+                    placeholder="이름"
+                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-sky-400"
+                  />
+                  <input
+                    value={phoneLast4}
+                    onChange={(event) =>
+                      setPhoneLast4(event.target.value.replace(/\D/g, "").slice(0, 4))
+                    }
+                    inputMode="numeric"
+                    maxLength={4}
+                    placeholder="전화번호 뒤 4자리"
+                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-sky-400"
+                  />
+                  {identifyError ? <p className="text-sm text-rose-600">{identifyError}</p> : null}
                   <button
                     onClick={() => {
-                      handleIdentify().catch(() => {
-                        setError(
-                          "회원 확인 처리 중 오류가 발생했습니다."
-                        );
-                      });
+                      identifyMember().catch(() => undefined);
                     }}
-                    disabled={identityLoading}
-                    className="mt-4 w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                    disabled={identifyLoading}
+                    className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
                   >
-                    {identityLoading
-                      ? "확인 중..."
-                      : "회원 정보 확인하기"}
+                    {identifyLoading ? "확인 중..." : "본인 확인하기"}
                   </button>
-                </>
+                  {session.joinToken ? (
+                    <Link
+                      href={`/join/${session.joinToken}`}
+                      className="block text-center text-sm font-semibold text-sky-600"
+                    >
+                      아직 회원이 아니라면 여기서 가입 신청하기
+                    </Link>
+                  ) : null}
+                </div>
               ) : (
-                <>
-                  <div className="mt-3 rounded-2xl bg-sky-50 p-4">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="mt-6 space-y-5">
+                  <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div>
-                        <p className="text-sm font-semibold text-sky-700">
-                          {identifiedMember.name}님으로 자동 인식됨
-                        </p>
-                        <p className="mt-1 text-sm text-slate-600">
-                          {getStatusLabel(
-                            identifiedMember.currentStatus
-                          )}
-                        </p>
+                        <p className="text-sm font-bold text-slate-500">확인된 회원</p>
+                        <p className="mt-1 text-xl font-black text-slate-900">{identifiedMember.name}</p>
+                        <p className="mt-2 text-sm text-slate-500">{statusLabel}</p>
                       </div>
                       <button
-                        onClick={clearRememberedMember}
-                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
+                        onClick={() => {
+                          localStorage.removeItem(rememberStorageKey);
+                          setIdentifiedMember(null);
+                          setIdentifyError("");
+                          setSubmitSuccessMessage("");
+                        }}
+                        className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-white"
                       >
                         다른 회원으로 확인
                       </button>
                     </div>
                   </div>
 
-                  <div className="mt-4 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+                  {submitSuccessMessage ? (
+                    <div className="rounded-[1.5rem] border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-semibold text-emerald-700">
+                      {submitSuccessMessage}
+                    </div>
+                  ) : null}
+
+                  <div className="rounded-[1.5rem] border border-slate-200 p-5">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-sm font-bold text-slate-900">
-                          함께 오는 게스트
-                        </p>
-                        <p className="mt-1 text-sm text-slate-500">
-                          게스트는 최대 5명까지 등록할 수 있어요.
+                        <h3 className="text-lg font-black text-slate-900">동반 게스트 등록</h3>
+                        <p className="mt-1 text-sm text-slate-500">게스트는 최대 5명까지 등록할 수 있습니다.</p>
+                        <p className="mt-2 text-xs leading-5 text-slate-400">
+                          이미 신청한 게스트는 현재 입력한 내용으로 다시 반영되고, 입력창에서 뺀 게스트는 신청이 취소됩니다.
+                          새 게스트만 추가해서 다시 신청하면 추가 인원만 더 반영됩니다.
                         </p>
                       </div>
                       <button
-                        onClick={addGuestField}
-                        disabled={guestNames.length >= MAX_GUEST_COUNT}
-                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300"
+                        onClick={() =>
+                          setIdentifiedMember((previous) => {
+                            if (!previous || previous.guests.length >= MAX_GUESTS) return previous;
+                            return { ...previous, guests: [...previous.guests, emptyGuest()] };
+                          })
+                        }
+                        disabled={(identifiedMember.guests?.length ?? 0) >= MAX_GUESTS}
+                        className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
                       >
                         게스트 추가
                       </button>
                     </div>
-
-                    <div className="mt-4 space-y-3">
-                      {guestNames.length === 0 ? (
-                        <p className="text-sm text-slate-400">
-                          등록된 게스트가 없습니다.
-                        </p>
-                      ) : null}
-
-                      {guestNames.map((guestName, index) => (
-                        <div
-                          key={`guest-${index}`}
-                          className="flex gap-2"
-                        >
-                          <input
-                            value={guestName}
-                            onChange={(event) =>
-                              updateGuestName(
-                                index,
-                                event.target.value
-                              )
-                            }
-                            placeholder={`게스트 ${index + 1} 이름`}
-                            className="flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-sky-400"
-                          />
-                          <button
-                            onClick={() => removeGuestField(index)}
-                            className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-bold text-rose-700 transition hover:bg-rose-100"
-                          >
-                            삭제
-                          </button>
+                    <div className="mt-4 space-y-4">
+                      {identifiedMember.guests.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-400">
+                          등록된 게스트가 없습니다. 필요하면 게스트를 추가해주세요.
                         </div>
-                      ))}
+                      ) : (
+                        identifiedMember.guests.map((guest, index) => (
+                          <div key={`guest-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="text-sm font-bold text-slate-700">게스트 {index + 1}</div>
+                              <button
+                                onClick={() =>
+                                  setIdentifiedMember((previous) =>
+                                    previous
+                                      ? { ...previous, guests: previous.guests.filter((_item, guestIndex) => guestIndex !== index) }
+                                      : previous
+                                  )
+                                }
+                                className="text-sm font-semibold text-rose-500"
+                              >
+                                삭제
+                              </button>
+                            </div>
+                            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                              <input value={guest.name} onChange={(event) => setIdentifiedMember((previous) => previous ? { ...previous, guests: previous.guests.map((item, guestIndex) => guestIndex === index ? { ...item, name: event.target.value } : item) } : previous)} placeholder="게스트 이름" className="rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-sky-400" />
+                              <input value={guest.age} onChange={(event) => setIdentifiedMember((previous) => previous ? { ...previous, guests: previous.guests.map((item, guestIndex) => guestIndex === index ? { ...item, age: event.target.value.replace(/\D/g, "").slice(0, 3) } : item) } : previous)} inputMode="numeric" placeholder="나이" className="rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-sky-400" />
+                              <select value={guest.gender} onChange={(event) => setIdentifiedMember((previous) => previous ? { ...previous, guests: previous.guests.map((item, guestIndex) => guestIndex === index ? { ...item, gender: event.target.value } : item) } : previous)} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-sky-400">
+                                <option value="">성별 선택</option>
+                                {GENDERS.map((gender) => (
+                                  <option key={gender} value={gender}>{gender}</option>
+                                ))}
+                              </select>
+                              <select value={guest.level} onChange={(event) => setIdentifiedMember((previous) => previous ? { ...previous, guests: previous.guests.map((item, guestIndex) => guestIndex === index ? { ...item, level: event.target.value } : item) } : previous)} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-sky-400">
+                                <option value="">급수 선택</option>
+                                {LEVELS.map((level) => (
+                                  <option key={level} value={level}>{level}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
 
-                  <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-                    <button
-                      onClick={() => {
-                        handleRespond("REGISTER").catch(() => {
-                          setError(
-                            "참석 응답을 처리하지 못했습니다."
-                          );
-                        });
-                      }}
-                      disabled={submitting || session.status !== "OPEN"}
-                      className="flex-1 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-                    >
-                      {submitting ? "처리 중..." : "참석 신청"}
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <button onClick={() => { handleRespond("REGISTER").catch(() => undefined); }} disabled={submitLoading} className="rounded-2xl bg-sky-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-sky-300">
+                      {submitLoading ? "처리 중..." : "참석 신청하기"}
                     </button>
-                    <button
-                      onClick={() => {
-                        handleRespond("CANCEL").catch(() => {
-                          setError(
-                            "참석 응답을 처리하지 못했습니다."
-                          );
-                        });
-                      }}
-                      disabled={submitting}
-                      className="flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
-                    >
-                      참석 취소
+                    <button onClick={() => { handleRespond("CANCEL").catch(() => undefined); }} disabled={submitLoading} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300">
+                      신청 취소하기
                     </button>
                   </div>
-                </>
+                </div>
               )}
-
-              {identityLoading && !identifiedMember ? (
-                <p className="mt-3 text-sm font-semibold text-slate-500">
-                  회원 정보를 확인하는 중입니다.
-                </p>
-              ) : null}
-
-              {session.status !== "OPEN" ? (
-                <p className="mt-3 text-sm font-semibold text-amber-600">
-                  현재 이 일정은 참석 신청을 받고 있지 않습니다.
-                </p>
-              ) : null}
-
-              {message ? (
-                <p className="mt-3 text-sm font-semibold text-emerald-600">
-                  {message}
-                </p>
-              ) : null}
-
-              {error ? (
-                <p className="mt-3 text-sm font-semibold text-rose-600">
-                  {error}
-                </p>
-              ) : null}
             </div>
 
-            {joinLink ? (
-              <div className="rounded-[1.5rem] bg-sky-50 p-5">
-                <p className="text-sm font-semibold text-sky-700">
-                  아직 회원 확인이 안 되셨나요?
-                </p>
-                <p className="mt-2 text-sm text-slate-600">
-                  먼저 가입 신청서를 작성하고 운영진에게 승인받아야
-                  참석 링크를 사용할 수 있습니다.
-                </p>
-                <Link
-                  href={joinLink}
-                  className="mt-3 inline-flex rounded-2xl bg-white px-4 py-3 text-sm font-bold text-sky-700 shadow-sm"
-                >
-                  가입 신청서 열기
-                </Link>
-              </div>
-            ) : null}
-
-            {session.participantNames.length > 0 ? (
-              <div className="rounded-[1.5rem] border border-slate-200 p-5">
-                <h2 className="text-lg font-black text-slate-900">
-                  현재 참석자
-                </h2>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {session.participantNames.map((name, index) => (
-                    <span
-                      key={`${name}-${index}`}
-                      className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700"
-                    >
-                      {name}
-                    </span>
-                  ))}
+            <div className="lg:w-[320px]">
+              <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
+                <h3 className="text-lg font-black text-slate-900">빠르게 확인하는 핵심 수치</h3>
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <div className="rounded-2xl bg-white p-4 shadow-sm">
+                    <div className="text-xs font-bold text-slate-400">회원 참석</div>
+                    <div className="mt-2 text-2xl font-black text-slate-900">{session.registeredMemberCount}</div>
+                  </div>
+                  <div className="rounded-2xl bg-white p-4 shadow-sm">
+                    <div className="text-xs font-bold text-slate-400">게스트 참석</div>
+                    <div className="mt-2 text-2xl font-black text-slate-900">{session.registeredGuestCount}</div>
+                  </div>
+                  <div className="rounded-2xl bg-white p-4 shadow-sm">
+                    <div className="text-xs font-bold text-slate-400">회원 대기</div>
+                    <div className="mt-2 text-2xl font-black text-slate-900">{session.waitlistMemberCount}</div>
+                  </div>
+                  <div className="rounded-2xl bg-white p-4 shadow-sm">
+                    <div className="text-xs font-bold text-slate-400">게스트 대기</div>
+                    <div className="mt-2 text-2xl font-black text-slate-900">{session.waitlistGuestCount}</div>
+                  </div>
                 </div>
               </div>
-            ) : null}
+            </div>
           </div>
-        ) : null}
+        </section>
 
-        {!loading && !session && error ? (
-          <div className="py-20 text-center text-sm font-semibold text-rose-600">
-            {error}
-          </div>
-        ) : null}
+        <ParticipantGroups title="회원 참석 현황" participants={registeredMembers} emptyMessage="아직 참석 신청한 회원이 없습니다." />
+        <ParticipantGroups title="게스트 참석 현황" participants={registeredGuests} emptyMessage="아직 등록된 게스트가 없습니다." />
+        <ParticipantGroups title="대기 중인 회원 현황" participants={waitlistedMembers} emptyMessage="현재 대기 중인 회원이 없습니다." />
+        <ParticipantGroups title="대기 중인 게스트 현황" participants={waitlistedGuests} emptyMessage="현재 대기 중인 게스트가 없습니다." />
       </div>
     </main>
   );

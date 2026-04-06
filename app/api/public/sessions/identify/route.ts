@@ -4,7 +4,86 @@ import {
   verifyPublicMemberToken,
 } from "@/lib/public-member-auth";
 import { normalizePhoneNumber } from "@/lib/session-registration";
+import { hasSessionParticipantGuestProfileColumns } from "@/lib/session-participant-schema";
 import { NextResponse } from "next/server";
+
+function hasMissingGuestProfileColumns(error: unknown) {
+  const message =
+    error instanceof Error ? error.message : String(error ?? "");
+
+  return (
+    message.includes("guestAge") ||
+    message.includes("guestGender") ||
+    message.includes("guestLevel") ||
+    message.includes("The column") ||
+    message.includes("P2022")
+  );
+}
+
+function mapGuestParticipantToDraft(
+  participant: {
+    guestName: string | null;
+    guestAge?: number | null;
+    guestGender?: string | null;
+    guestLevel?: string | null;
+  }
+) {
+  return {
+    name: participant.guestName ?? "",
+    age:
+      participant.guestAge === null
+        ? ""
+        : String(participant.guestAge),
+    gender: participant.guestGender ?? "",
+    level: participant.guestLevel ?? "",
+  };
+}
+
+async function findSessionForIdentify(token: string) {
+  const includeGuestProfile =
+    await hasSessionParticipantGuestProfileColumns();
+
+  if (includeGuestProfile) {
+    return await prisma.clubSession.findUnique({
+      where: { publicToken: token },
+      include: {
+        participants: {
+          select: {
+            id: true,
+            status: true,
+            memberId: true,
+            hostMemberId: true,
+            guestName: true,
+            guestAge: true,
+            guestGender: true,
+            guestLevel: true,
+          },
+          orderBy: {
+            createdAt: "asc",
+          },
+        },
+      },
+    });
+  }
+
+  return await prisma.clubSession.findUnique({
+    where: { publicToken: token },
+    include: {
+      participants: {
+        select: {
+          id: true,
+          status: true,
+          memberId: true,
+          hostMemberId: true,
+          guestName: true,
+        },
+        orderBy: {
+          createdAt: "asc",
+        },
+      },
+    },
+  });
+}
 
 export async function POST(req: Request) {
   try {
@@ -23,16 +102,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const session = await prisma.clubSession.findUnique({
-      where: { publicToken: token },
-      include: {
-        participants: {
-          orderBy: {
-            createdAt: "asc",
-          },
-        },
-      },
-    });
+    const session = await findSessionForIdentify(token);
 
     if (!session) {
       return NextResponse.json(
@@ -105,14 +175,14 @@ export async function POST(req: Request) {
       (item) => item.memberId === member.id
     );
 
-    const guestNames = session.participants
+    const guests = session.participants
       .filter(
         (item) =>
           item.hostMemberId === member.id &&
           item.status !== "CANCELED" &&
           item.guestName
       )
-      .map((item) => item.guestName as string);
+      .map(mapGuestParticipantToDraft);
 
     const nextRememberToken =
       rememberToken ||
@@ -128,7 +198,7 @@ export async function POST(req: Request) {
         id: member.id,
         name: member.name,
         currentStatus: participant?.status ?? "NONE",
-        guestNames,
+        guests,
       },
     });
   } catch (error) {

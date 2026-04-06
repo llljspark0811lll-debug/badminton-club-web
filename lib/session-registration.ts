@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { hasSessionParticipantGuestProfileColumns } from "@/lib/session-participant-schema";
 
 type PrismaLikeClient = Prisma.TransactionClient | typeof prisma;
 
@@ -20,8 +21,14 @@ export async function promoteWaitlistIfPossible(
 ) {
   const session = await db.clubSession.findUnique({
     where: { id: sessionId },
-    include: {
+    select: {
+      id: true,
+      capacity: true,
       participants: {
+        select: {
+          id: true,
+          status: true,
+        },
         orderBy: {
           createdAt: "asc",
         },
@@ -49,7 +56,15 @@ export async function promoteWaitlistIfPossible(
     return;
   }
 
-  await db.sessionParticipant.update({
+  if (await hasSessionParticipantGuestProfileColumns()) {
+    await db.sessionParticipant.update({
+      where: { id: waitlisted.id },
+      data: { status: "REGISTERED" },
+    });
+    return;
+  }
+
+  await db.sessionParticipant.updateMany({
     where: { id: waitlisted.id },
     data: { status: "REGISTERED" },
   });

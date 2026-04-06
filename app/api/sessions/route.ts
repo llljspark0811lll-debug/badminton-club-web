@@ -4,7 +4,21 @@ import {
   unauthorizedResponse,
 } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
+import { hasSessionParticipantGuestProfileColumns } from "@/lib/session-participant-schema";
 import { NextResponse } from "next/server";
+
+function hasMissingGuestProfileColumns(error: unknown) {
+  const message =
+    error instanceof Error ? error.message : String(error ?? "");
+
+  return (
+    message.includes("guestAge") ||
+    message.includes("guestGender") ||
+    message.includes("guestLevel") ||
+    message.includes("The column") ||
+    message.includes("P2022")
+  );
+}
 
 async function getSessionSummaries(clubId: number) {
   const sessions = await prisma.clubSession.findMany({
@@ -58,6 +72,92 @@ async function getSessionSummaries(clubId: number) {
   }));
 }
 
+async function findSessionDetail(sessionId: number, clubId: number) {
+  const includeGuestProfile =
+    await hasSessionParticipantGuestProfileColumns();
+
+  if (includeGuestProfile) {
+    return await prisma.clubSession.findFirst({
+      where: {
+        id: sessionId,
+        clubId,
+      },
+      include: {
+        participants: {
+          select: {
+            id: true,
+            sessionId: true,
+            memberId: true,
+            guestName: true,
+            guestAge: true,
+            guestGender: true,
+            guestLevel: true,
+            hostMemberId: true,
+            status: true,
+            attendanceStatus: true,
+            checkedInAt: true,
+            createdAt: true,
+            member: {
+              select: {
+                id: true,
+                name: true,
+                phone: true,
+              },
+            },
+            hostMember: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+          orderBy: {
+            createdAt: "asc",
+          },
+        },
+      },
+    });
+  }
+
+  return await prisma.clubSession.findFirst({
+    where: {
+      id: sessionId,
+      clubId,
+    },
+    include: {
+      participants: {
+        select: {
+          id: true,
+          sessionId: true,
+          memberId: true,
+          guestName: true,
+          hostMemberId: true,
+          status: true,
+          attendanceStatus: true,
+          checkedInAt: true,
+          createdAt: true,
+          member: {
+            select: {
+              id: true,
+              name: true,
+              phone: true,
+            },
+          },
+          hostMember: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "asc",
+        },
+      },
+    },
+  });
+}
+
 export async function GET(req: Request) {
   try {
     const admin = await requireAuthAdmin();
@@ -77,34 +177,7 @@ export async function GET(req: Request) {
       sessionId !== null &&
       Number.isFinite(sessionId)
     ) {
-      const session = await prisma.clubSession.findFirst({
-        where: {
-          id: sessionId,
-          clubId: admin.clubId,
-        },
-        include: {
-          participants: {
-            include: {
-              member: {
-                select: {
-                  id: true,
-                  name: true,
-                  phone: true,
-                },
-              },
-              hostMember: {
-                select: {
-                  id: true,
-                  name: true,
-                },
-              },
-            },
-            orderBy: {
-              createdAt: "asc",
-            },
-          },
-        },
-      });
+      const session = await findSessionDetail(sessionId, admin.clubId);
 
       if (!session) {
         return notFoundResponse("운동 일정을 찾을 수 없습니다.");

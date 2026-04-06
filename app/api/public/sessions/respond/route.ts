@@ -1,20 +1,106 @@
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyPublicMemberToken } from "@/lib/public-member-auth";
 import {
   getNextRegistrationStatus,
   promoteWaitlistIfPossible,
 } from "@/lib/session-registration";
-import { NextResponse } from "next/server";
+import { hasSessionParticipantGuestProfileColumns } from "@/lib/session-participant-schema";
 
-function sanitizeGuestNames(value: unknown) {
-  if (!Array.isArray(value)) {
-    return [];
+type GuestEntry = {
+  name: string;
+  age: string;
+  gender: string;
+  level: string;
+};
+
+function hasMissingGuestProfileColumns(error: unknown) {
+  const message =
+    error instanceof Error ? error.message : String(error ?? "");
+
+  return (
+    message.includes("guestAge") ||
+    message.includes("guestGender") ||
+    message.includes("guestLevel") ||
+    message.includes("The column") ||
+    message.includes("P2022")
+  );
+}
+
+async function findSessionForRespond(token: string) {
+  return await prisma.clubSession.findUnique({
+    where: { publicToken: token },
+    include: {
+      participants: {
+        select: {
+          id: true,
+          status: true,
+          memberId: true,
+          hostMemberId: true,
+          guestName: true,
+          createdAt: true,
+        },
+        orderBy: {
+          createdAt: "asc",
+        },
+      },
+    },
+  });
+}
+
+function sanitizeGuestEntries(value: unknown): GuestEntry[] {
+  const legacyGuestNames = Array.isArray(value)
+    ? value
+    : Array.isArray(
+        (value as { guestNames?: unknown[] } | null)?.guestNames
+      )
+    ? ((value as { guestNames?: unknown[] }).guestNames ?? [])
+    : [];
+
+  return legacyGuestNames
+    .map((item) => {
+      if (typeof item === "string") {
+        return {
+          name: item.trim(),
+          age: "",
+          gender: "",
+          level: "",
+        };
+      }
+
+      return {
+        name: String((item as GuestEntry | null)?.name ?? "").trim(),
+        age: String((item as GuestEntry | null)?.age ?? "").replace(
+          /\D/g,
+          ""
+        ),
+        gender: String((item as GuestEntry | null)?.gender ?? "").trim(),
+        level: String((item as GuestEntry | null)?.level ?? "").trim(),
+      };
+    })
+    .filter((item) => item.name)
+    .slice(0, 5);
+}
+
+function validateGuestEntries(guests: GuestEntry[]) {
+  const invalidGuest = guests.find(
+    (guest) => !guest.name || !guest.age || !guest.gender || !guest.level
+  );
+
+  if (invalidGuest) {
+    return "게스트 정보를 모두 입력해주세요. 이름, 나이, 성별, 급수를 확인해주세요.";
   }
 
-  return value
-    .map((item) => String(item ?? "").trim())
-    .filter(Boolean)
-    .slice(0, 5);
+  const invalidAge = guests.find((guest) => {
+    const age = Number(guest.age);
+    return !Number.isInteger(age) || age < 1 || age > 120;
+  });
+
+  if (invalidAge) {
+    return "게스트 나이는 1세부터 120세 사이로 입력해주세요.";
+  }
+
+  return null;
 }
 
 export async function POST(req: Request) {
@@ -22,9 +108,10 @@ export async function POST(req: Request) {
     const body = await req.json();
     const token = String(body.token ?? "").trim();
     const rememberToken = String(body.rememberToken ?? "").trim();
-    const action =
-      body.action === "CANCEL" ? "CANCEL" : "REGISTER";
-    const guestNames = sanitizeGuestNames(body.guestNames);
+    const action = body.action === "CANCEL" ? "CANCEL" : "REGISTER";
+    const guestEntries = sanitizeGuestEntries(
+      body.guests ?? body.guestNames
+    );
 
     if (!token || !rememberToken) {
       return NextResponse.json(
@@ -33,16 +120,16 @@ export async function POST(req: Request) {
       );
     }
 
-    const session = await prisma.clubSession.findUnique({
-      where: { publicToken: token },
-      include: {
-        participants: {
-          orderBy: {
-            createdAt: "asc",
-          },
-        },
-      },
-    });
+    const guestValidationError = validateGuestEntries(guestEntries);
+
+    if (guestValidationError) {
+      return NextResponse.json(
+        { error: guestValidationError },
+        { status: 400 }
+      );
+    }
+
+    const session = await findSessionForRespond(token);
 
     if (!session) {
       return NextResponse.json(
@@ -85,8 +172,7 @@ export async function POST(req: Request) {
       const activeOwnedParticipants = session.participants.filter(
         (item) =>
           item.status !== "CANCELED" &&
-          (item.memberId === member.id ||
-            item.hostMemberId === member.id)
+          (item.memberId === member.id || item.hostMemberId === member.id)
       );
 
       const freedRegisteredCount = activeOwnedParticipants.filter(
@@ -108,11 +194,7 @@ export async function POST(req: Request) {
             },
           });
 
-          for (
-            let index = 0;
-            index < freedRegisteredCount;
-            index += 1
-          ) {
+          for (let index = 0; index < freedRegisteredCount; index += 1) {
             await promoteWaitlistIfPossible(tx, session.id);
           }
         });
@@ -141,9 +223,7 @@ export async function POST(req: Request) {
     const previousRegisteredCount = [
       existingMemberParticipant,
       ...existingGuestParticipants,
-    ].filter(
-      (item) => item && item.status === "REGISTERED"
-    ).length;
+    ].filter((item) => item && item.status === "REGISTERED").length;
 
     const excludedIds = [
       existingMemberParticipant?.id,
@@ -151,9 +231,7 @@ export async function POST(req: Request) {
     ].filter((value): value is number => Boolean(value));
 
     const otherParticipants = session.participants.filter(
-      (item) =>
-        item.status !== "CANCELED" &&
-        !excludedIds.includes(item.id)
+      (item) => item.status !== "CANCELED" && !excludedIds.includes(item.id)
     );
 
     let registeredCount = otherParticipants.filter(
@@ -170,7 +248,7 @@ export async function POST(req: Request) {
       registeredCount += 1;
     }
 
-    const guestStatuses = guestNames.map(() => {
+    const guestStatuses = guestEntries.map(() => {
       const status = getNextRegistrationStatus(
         session.capacity,
         registeredCount
@@ -185,104 +263,151 @@ export async function POST(req: Request) {
 
     const nextRegisteredCount =
       (memberStatus === "REGISTERED" ? 1 : 0) +
-      guestStatuses.filter((status) => status === "REGISTERED")
-        .length;
+      guestStatuses.filter((status) => status === "REGISTERED").length;
 
     const freedRegisteredCount = Math.max(
       0,
       previousRegisteredCount - nextRegisteredCount
     );
 
-    await prisma.$transaction(async (tx) => {
-      if (existingMemberParticipant) {
-        await tx.sessionParticipant.update({
-          where: { id: existingMemberParticipant.id },
-          data: {
+    const applyRegistrationChanges = async (includeGuestProfile: boolean) => {
+      await prisma.$transaction(async (tx) => {
+        const createParticipant = async (
+          data: Record<string, unknown>
+        ) => {
+          if (includeGuestProfile) {
+            await tx.sessionParticipant.create({ data: data as never });
+            return;
+          }
+
+          await tx.sessionParticipant.createMany({
+            data: [data as never],
+          });
+        };
+
+        const updateParticipant = async (
+          id: number,
+          data: Record<string, unknown>
+        ) => {
+          if (includeGuestProfile) {
+            await tx.sessionParticipant.update({
+              where: { id },
+              data: data as never,
+            });
+            return;
+          }
+
+          await tx.sessionParticipant.updateMany({
+            where: { id },
+            data: data as never,
+          });
+        };
+
+        if (existingMemberParticipant) {
+          await updateParticipant(existingMemberParticipant.id, {
             memberId: member.id,
             guestName: null,
+            ...(includeGuestProfile
+              ? {
+                  guestAge: null,
+                  guestGender: null,
+                  guestLevel: null,
+                }
+              : {}),
             hostMemberId: null,
             status: memberStatus,
             attendanceStatus: "PENDING",
             checkedInAt: null,
             createdAt,
-          },
-        });
-      } else {
-        await tx.sessionParticipant.create({
-          data: {
+          });
+        } else {
+          await createParticipant({
             sessionId: session.id,
             memberId: member.id,
             status: memberStatus,
             attendanceStatus: "PENDING",
             checkedInAt: null,
             createdAt,
-          },
-        });
-      }
-
-      for (let index = 0; index < guestNames.length; index += 1) {
-        const existingGuest = existingGuestParticipants[index];
-
-        if (existingGuest) {
-          await tx.sessionParticipant.update({
-            where: { id: existingGuest.id },
-            data: {
-              memberId: null,
-              guestName: guestNames[index],
-              hostMemberId: member.id,
-              status: guestStatuses[index],
-              attendanceStatus: "PENDING",
-              checkedInAt: null,
-              createdAt,
-            },
           });
-        } else {
-          await tx.sessionParticipant.create({
-            data: {
-              sessionId: session.id,
-              guestName: guestNames[index],
+        }
+
+        for (let index = 0; index < guestEntries.length; index += 1) {
+          const existingGuest = existingGuestParticipants[index];
+          const guest = guestEntries[index];
+          const guestProfileData = includeGuestProfile
+            ? {
+                guestAge: Number(guest.age),
+                guestGender: guest.gender,
+                guestLevel: guest.level,
+              }
+            : {};
+
+          if (existingGuest) {
+            await updateParticipant(existingGuest.id, {
+              memberId: null,
+              guestName: guest.name,
+              ...guestProfileData,
               hostMemberId: member.id,
               status: guestStatuses[index],
               attendanceStatus: "PENDING",
               checkedInAt: null,
               createdAt,
+            });
+          } else {
+            await createParticipant({
+              sessionId: session.id,
+              guestName: guest.name,
+              ...guestProfileData,
+              hostMemberId: member.id,
+              status: guestStatuses[index],
+              attendanceStatus: "PENDING",
+              checkedInAt: null,
+              createdAt,
+            });
+          }
+        }
+
+        const extraGuests = existingGuestParticipants.slice(guestEntries.length);
+
+        if (extraGuests.length > 0) {
+          await tx.sessionParticipant.updateMany({
+            where: {
+              id: {
+                in: extraGuests.map((item) => item.id),
+              },
+            },
+            data: {
+              status: "CANCELED",
+              attendanceStatus: "PENDING",
+              checkedInAt: null,
             },
           });
         }
-      }
 
-      const extraGuests = existingGuestParticipants.slice(
-        guestNames.length
-      );
+        for (let index = 0; index < freedRegisteredCount; index += 1) {
+          await promoteWaitlistIfPossible(tx, session.id);
+        }
+      });
+    };
 
-      if (extraGuests.length > 0) {
-        await tx.sessionParticipant.updateMany({
-          where: {
-            id: {
-              in: extraGuests.map((item) => item.id),
-            },
-          },
-          data: {
-            status: "CANCELED",
-            attendanceStatus: "PENDING",
-            checkedInAt: null,
-          },
-        });
-      }
+    const includeGuestProfile =
+      guestEntries.length > 0 &&
+      (await hasSessionParticipantGuestProfileColumns());
 
-      for (
-        let index = 0;
-        index < freedRegisteredCount;
-        index += 1
-      ) {
-        await promoteWaitlistIfPossible(tx, session.id);
+    try {
+      await applyRegistrationChanges(includeGuestProfile);
+    } catch (error) {
+      if (includeGuestProfile && hasMissingGuestProfileColumns(error)) {
+        await applyRegistrationChanges(false);
+      } else {
+        throw error;
       }
-    });
+    }
 
     return NextResponse.json({
       success: true,
       status: memberStatus,
-      guestCount: guestNames.length,
+      guestCount: guestEntries.length,
       waitlistGuestCount: guestStatuses.filter(
         (status) => status === "WAITLIST"
       ).length,

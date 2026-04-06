@@ -175,6 +175,9 @@ model SessionParticipant {
   checkedInAt      DateTime?
   createdAt        DateTime @default(now())
   guestName        String?
+  guestAge         Int?
+  guestGender      String?
+  guestLevel       String?
 
   sessionId Int
   session   ClubSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)

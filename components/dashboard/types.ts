@@ -79,6 +79,9 @@ export interface SessionParticipant {
   createdAt: string | Date;
   memberId: number | null;
   guestName: string | null;
+  guestAge: number | null;
+  guestGender: string | null;
+  guestLevel: string | null;
   hostMemberId: number | null;
   member: Member | null;
   hostMember: Member | null;

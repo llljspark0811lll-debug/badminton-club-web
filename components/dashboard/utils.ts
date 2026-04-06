@@ -108,12 +108,14 @@ export function getAttendanceStatusLabel(
   return "미체크";
 }
 
-export function normalizeGenderLabel(gender: string) {
-  const value = gender.trim().toLowerCase();
+export function normalizeGenderLabel(
+  gender: string | null | undefined
+) {
+  const value = String(gender ?? "").trim().toLowerCase();
 
   if (["남", "남자", "m", "male"].includes(value)) return "남";
   if (["여", "여자", "f", "female"].includes(value)) return "여";
-  return gender || "-";
+  return String(gender ?? "").trim() || "-";
 }
 
 export function getGenderSortRank(gender: string) {
@@ -186,7 +188,17 @@ export function getParticipantMetaText(
   if (participant.guestName) {
     const hostName =
       participant.hostMember?.name ?? "동반 회원 미확인";
-    return `게스트 · 동반 회원 ${hostName}`;
+    const guestMeta = [
+      participant.guestGender
+        ? normalizeGenderLabel(participant.guestGender)
+        : "",
+      participant.guestLevel?.trim() ?? "",
+      participant.guestAge ? `${participant.guestAge}세` : "",
+    ].filter(Boolean);
+
+    return guestMeta.length > 0
+      ? `게스트 · ${guestMeta.join(" · ")} · 동반 회원 ${hostName}`
+      : `게스트 · 동반 회원 ${hostName}`;
   }
 
   return formatPhoneNumber(participant.member?.phone) || "-";

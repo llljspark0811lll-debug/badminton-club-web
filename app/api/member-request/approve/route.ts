@@ -4,9 +4,9 @@ import {
   unauthorizedResponse,
 } from "@/lib/api-auth";
 import {
-  formatPhoneNumber,
-  normalizePhoneNumber,
-} from "@/lib/phone";
+  findDuplicateActiveMember,
+} from "@/lib/member-identity";
+import { formatPhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -41,24 +41,11 @@ export async function POST(req: Request) {
 
     const normalizedPhone = formatPhoneNumber(memberRequest.phone);
 
-    const duplicateMemberCandidates = await prisma.member.findMany({
-      where: {
-        clubId: memberRequest.clubId,
-        name: memberRequest.name,
-        deleted: false,
-      },
-      select: {
-        id: true,
-        phone: true,
-      },
-    });
-
-    const duplicateMember =
-      duplicateMemberCandidates.find(
-        (member) =>
-          normalizePhoneNumber(member.phone) ===
-          normalizePhoneNumber(normalizedPhone)
-      ) ?? null;
+    const duplicateMember = await findDuplicateActiveMember(
+      memberRequest.name,
+      normalizedPhone,
+      { clubId: memberRequest.clubId }
+    );
 
     if (duplicateMember) {
       return NextResponse.json(

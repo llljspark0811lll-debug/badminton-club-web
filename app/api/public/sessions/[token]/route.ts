@@ -1,30 +1,45 @@
-import { prisma } from "@/lib/prisma";
-import {
-  getRegisteredParticipants,
-  getWaitlistedParticipants,
-} from "@/lib/session-summary";
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { hasSessionParticipantGuestProfileColumns } from "@/lib/session-participant-schema";
 
-function getParticipantName(participant: {
-  guestName?: string | null;
-  member?: { name: string } | null;
-}) {
-  if (participant.guestName) {
-    return `${participant.guestName} (게스트)`;
-  }
-
-  return participant.member?.name ?? "이름 없음";
+function getRegisteredParticipantsCount(
+  participants: Array<{ status: string }>
+) {
+  return participants.filter(
+    (participant) => participant.status === "REGISTERED"
+  ).length;
 }
 
-export async function GET(
-  request: Request,
-  context: { params: Promise<{ token: string }> }
+function getWaitlistedParticipantsCount(
+  participants: Array<{ status: string }>
 ) {
-  try {
-    const { token } = await context.params;
+  return participants.filter(
+    (participant) => participant.status === "WAITLIST"
+  ).length;
+}
 
-    const session = await prisma.clubSession.findUnique({
-      where: { publicToken: String(token).trim() },
+function hasMissingGuestProfileColumns(error: unknown) {
+  const message =
+    error instanceof Error ? error.message : String(error ?? "");
+
+  return (
+    message.includes("guestAge") ||
+    message.includes("guestGender") ||
+    message.includes("guestLevel") ||
+    message.includes("The column") ||
+    message.includes("P2022")
+  );
+}
+
+async function findSessionByPublicToken(token: string) {
+  const includeGuestProfile =
+    await hasSessionParticipantGuestProfileColumns();
+
+  if (includeGuestProfile) {
+    return await prisma.clubSession.findUnique({
+      where: {
+        publicToken: String(token).trim(),
+      },
       include: {
         club: {
           select: {
@@ -38,15 +53,19 @@ export async function GET(
               not: "CANCELED",
             },
           },
-          include: {
+          select: {
+            id: true,
+            status: true,
+            guestName: true,
+            guestAge: true,
+            guestGender: true,
+            guestLevel: true,
             member: {
               select: {
+                id: true,
                 name: true,
-              },
-            },
-            hostMember: {
-              select: {
-                name: true,
+                gender: true,
+                level: true,
               },
             },
           },
@@ -56,6 +75,54 @@ export async function GET(
         },
       },
     });
+  }
+
+  return await prisma.clubSession.findUnique({
+    where: {
+      publicToken: String(token).trim(),
+    },
+    include: {
+      club: {
+        select: {
+          name: true,
+          publicJoinToken: true,
+        },
+      },
+      participants: {
+        where: {
+          status: {
+            not: "CANCELED",
+          },
+        },
+        select: {
+          id: true,
+          status: true,
+          guestName: true,
+          member: {
+            select: {
+              id: true,
+              name: true,
+              gender: true,
+              level: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "asc",
+        },
+      },
+    },
+  });
+}
+
+export async function GET(
+  request: Request,
+  context: { params: Promise<{ token: string }> }
+) {
+  try {
+    const { token } = await context.params;
+
+    const session = await findSessionByPublicToken(token);
 
     if (!session) {
       return NextResponse.json(
@@ -63,6 +130,38 @@ export async function GET(
         { status: 404 }
       );
     }
+
+    const registeredParticipants = session.participants.filter(
+      (participant) => participant.status === "REGISTERED"
+    );
+    const waitlistedParticipants = session.participants.filter(
+      (participant) => participant.status === "WAITLIST"
+    );
+
+    const toPublicParticipant = (
+      participant: (typeof session.participants)[number]
+    ) => {
+      const guestProfileParticipant = participant as typeof participant & {
+        guestAge?: number | null;
+        guestGender?: string | null;
+        guestLevel?: string | null;
+      };
+
+      return {
+        id: participant.id,
+        type: participant.guestName ? ("GUEST" as const) : ("MEMBER" as const),
+        name: participant.guestName ?? participant.member?.name ?? "이름 없음",
+        age: guestProfileParticipant.guestAge ?? null,
+        gender:
+          guestProfileParticipant.guestGender ??
+          participant.member?.gender ??
+          null,
+        level:
+          guestProfileParticipant.guestLevel ??
+          participant.member?.level ??
+          null,
+      };
+    };
 
     return NextResponse.json({
       id: session.id,
@@ -77,14 +176,26 @@ export async function GET(
       status: session.status,
       clubName: session.club.name,
       joinToken: session.club.publicJoinToken,
-      registeredCount: getRegisteredParticipants(session.participants),
-      waitlistCount: getWaitlistedParticipants(session.participants),
-      participantNames: session.participants
-        .filter((participant) => participant.status === "REGISTERED")
-        .map(getParticipantName),
+      registeredCount: getRegisteredParticipantsCount(session.participants),
+      waitlistCount: getWaitlistedParticipantsCount(session.participants),
+      registeredMemberCount: registeredParticipants.filter(
+        (participant) => !participant.guestName
+      ).length,
+      registeredGuestCount: registeredParticipants.filter((participant) =>
+        Boolean(participant.guestName)
+      ).length,
+      waitlistMemberCount: waitlistedParticipants.filter(
+        (participant) => !participant.guestName
+      ).length,
+      waitlistGuestCount: waitlistedParticipants.filter((participant) =>
+        Boolean(participant.guestName)
+      ).length,
+      registeredParticipants: registeredParticipants.map(toPublicParticipant),
+      waitlistedParticipants: waitlistedParticipants.map(toPublicParticipant),
     });
   } catch (error) {
     console.error(error);
+
     return NextResponse.json(
       { error: "운동 일정 정보를 불러오지 못했습니다." },
       { status: 500 }

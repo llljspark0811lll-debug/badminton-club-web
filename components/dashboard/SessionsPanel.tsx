@@ -6,9 +6,7 @@ import {
   formatDate,
   getParticipantDisplayName,
   getParticipantMetaText,
-  getParticipantStatusLabel,
   getRegisteredParticipants,
-  getSessionStatusLabel,
   getWaitlistedParticipants,
   isGuestParticipant,
 } from "@/components/dashboard/utils";
@@ -33,6 +31,12 @@ type SessionsPanelProps = {
     sessionId: number,
     status: ClubSession["status"]
   ) => Promise<void>;
+};
+
+const SESSION_STATUS_LABEL: Record<ClubSession["status"], string> = {
+  OPEN: "모집 중",
+  CLOSED: "마감",
+  CANCELED: "취소",
 };
 
 function getTodayDateInputValue() {
@@ -136,9 +140,9 @@ export function SessionsPanel({
 
     try {
       await navigator.clipboard.writeText(publicSessionLink);
-      alert("운동 일정 링크를 복사했습니다.");
+      alert("참석 신청 링크를 복사했습니다.");
     } catch {
-      alert("운동 일정 링크 복사에 실패했습니다.");
+      alert("참석 신청 링크 복사에 실패했습니다.");
     }
   }
 
@@ -150,8 +154,8 @@ export function SessionsPanel({
             운동 일정 만들기
           </h3>
           <p className="mt-2 text-sm text-slate-500">
-            날짜, 시간, 장소, 정원을 입력하면 카카오톡 공유용
-            참석 링크까지 바로 만들 수 있습니다.
+            날짜, 시간, 장소, 정원을 입력하면 카카오톡 공유용 참석 링크까지
+            바로 만들 수 있습니다.
           </p>
 
           <div className="mt-5 space-y-3">
@@ -286,7 +290,7 @@ export function SessionsPanel({
                           : "bg-slate-100 text-slate-600"
                       }`}
                     >
-                      {getSessionStatusLabel(session.status)}
+                      {SESSION_STATUS_LABEL[session.status]}
                     </span>
                   </div>
                   <div className="mt-2 text-sm opacity-80">
@@ -321,15 +325,14 @@ export function SessionsPanel({
                       {selectedSession.title}
                     </h3>
                     <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
-                      {getSessionStatusLabel(selectedSession.status)}
+                      {SESSION_STATUS_LABEL[selectedSession.status]}
                     </span>
                   </div>
                   <p className="mt-2 text-sm text-slate-500">
                     {formatDate(selectedSession.date)}{" "}
-                    {selectedSession.startTime} -{" "}
-                    {selectedSession.endTime}
+                    {selectedSession.startTime} - {selectedSession.endTime}
                     {selectedSession.location
-                      ? ` · ${selectedSession.location}`
+                      ? ` | ${selectedSession.location}`
                       : ""}
                   </p>
                   <p className="mt-1 text-sm text-slate-400">
@@ -354,7 +357,7 @@ export function SessionsPanel({
                           status
                         )}`}
                       >
-                        {getSessionStatusLabel(status)}
+                        {SESSION_STATUS_LABEL[status]}
                       </button>
                     )
                   )}
@@ -382,23 +385,20 @@ export function SessionsPanel({
               </div>
 
               <div className="rounded-[1.5rem] bg-sky-50 p-4">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div className="max-w-2xl">
                     <p className="text-sm font-semibold text-sky-700">
-                      카카오톡 공유 링크
+                      참석 신청 공유 링크
                     </p>
                     <p className="mt-2 text-sm leading-6 text-slate-600">
-                      단톡방에 이 링크를 올리면 회원이 직접 참석
-                      신청과 취소를 할 수 있고, 게스트도 같이
-                      등록됩니다.
+                      회원은 이 링크에서 현재 참석 현황을 바로 보고 참석 신청,
+                      취소, 게스트 등록까지 할 수 있습니다.
                     </p>
                   </div>
                   <button
                     onClick={() => {
                       handleCopyLink().catch(() => {
-                        alert(
-                          "운동 일정 링크 복사에 실패했습니다."
-                        );
+                        alert("참석 신청 링크 복사에 실패했습니다.");
                       });
                     }}
                     className="rounded-2xl bg-sky-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-sky-700"
@@ -407,7 +407,7 @@ export function SessionsPanel({
                   </button>
                 </div>
 
-                <div className="mt-4 break-all rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs leading-7 text-slate-600 sm:text-sm">
+                <div className="mt-4 break-all rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs leading-7 text-slate-500 sm:text-sm">
                   {publicSessionLink}
                 </div>
               </div>
@@ -462,10 +462,18 @@ export function SessionsPanel({
                     <table className="min-w-[520px] w-full text-sm">
                       <thead className="bg-white text-left text-slate-500">
                         <tr>
-                          <th className="px-4 py-4 font-semibold">이름</th>
-                          <th className="px-4 py-4 font-semibold">구분</th>
-                          <th className="px-4 py-4 font-semibold">연락처/메모</th>
-                          <th className="px-4 py-4 font-semibold">상태</th>
+                          <th className="px-4 py-4 font-semibold">
+                            이름
+                          </th>
+                          <th className="px-4 py-4 font-semibold">
+                            구분
+                          </th>
+                          <th className="px-4 py-4 font-semibold">
+                            연락처 / 메모
+                          </th>
+                          <th className="px-4 py-4 font-semibold">
+                            상태
+                          </th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -494,7 +502,7 @@ export function SessionsPanel({
                               {getParticipantMetaText(participant)}
                             </td>
                             <td className="px-4 py-4 text-slate-500">
-                              {getParticipantStatusLabel(participant.status)}
+                              참석
                             </td>
                           </tr>
                         ))}
@@ -505,7 +513,7 @@ export function SessionsPanel({
                               colSpan={4}
                               className="px-4 py-12 text-center text-sm text-slate-400"
                             >
-                              아직 참석 신청한 인원이 없습니다.
+                              아직 참석 신청한 사람이 없습니다.
                             </td>
                           </tr>
                         ) : null}
@@ -520,8 +528,7 @@ export function SessionsPanel({
                       대기 인원 명단
                     </h4>
                     <p className="mt-1 text-sm text-slate-500">
-                      정원 초과 뒤 신청된 인원은 자동으로 대기로
-                      이동합니다.
+                      정원 초과 후 신청한 인원은 자동으로 대기로 들어갑니다.
                     </p>
                   </div>
 
@@ -529,10 +536,18 @@ export function SessionsPanel({
                     <table className="min-w-[520px] w-full text-sm">
                       <thead className="bg-white text-left text-slate-500">
                         <tr>
-                          <th className="px-4 py-4 font-semibold">이름</th>
-                          <th className="px-4 py-4 font-semibold">구분</th>
-                          <th className="px-4 py-4 font-semibold">연락처/메모</th>
-                          <th className="px-4 py-4 font-semibold">상태</th>
+                          <th className="px-4 py-4 font-semibold">
+                            이름
+                          </th>
+                          <th className="px-4 py-4 font-semibold">
+                            구분
+                          </th>
+                          <th className="px-4 py-4 font-semibold">
+                            연락처 / 메모
+                          </th>
+                          <th className="px-4 py-4 font-semibold">
+                            상태
+                          </th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -561,7 +576,7 @@ export function SessionsPanel({
                               {getParticipantMetaText(participant)}
                             </td>
                             <td className="px-4 py-4 text-slate-500">
-                              {getParticipantStatusLabel(participant.status)}
+                              대기
                             </td>
                           </tr>
                         ))}
@@ -572,7 +587,7 @@ export function SessionsPanel({
                               colSpan={4}
                               className="px-4 py-12 text-center text-sm text-slate-400"
                             >
-                              현재 대기 인원이 없습니다.
+                              현재 대기 인원은 없습니다.
                             </td>
                           </tr>
                         ) : null}

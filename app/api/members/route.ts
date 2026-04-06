@@ -3,10 +3,8 @@ import {
   requireAuthAdmin,
   unauthorizedResponse,
 } from "@/lib/api-auth";
-import {
-  formatPhoneNumber,
-  normalizePhoneNumber,
-} from "@/lib/phone";
+import { findDuplicateActiveMember } from "@/lib/member-identity";
+import { formatPhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -20,45 +18,6 @@ async function findClubMember(
       clubId,
     },
   });
-}
-
-async function findDuplicateActiveMember(
-  clubId: number,
-  name: string,
-  phone: string,
-  excludeMemberId?: number
-) {
-  if (!phone) {
-    return null;
-  }
-
-  const candidates = await prisma.member.findMany({
-    where: {
-      clubId,
-      name,
-      deleted: false,
-      ...(excludeMemberId
-        ? {
-            NOT: {
-              id: excludeMemberId,
-            },
-          }
-        : {}),
-    },
-    select: {
-      id: true,
-      phone: true,
-    },
-  });
-
-  const normalizedPhone = normalizePhoneNumber(phone);
-
-  return (
-    candidates.find(
-      (member) =>
-        normalizePhoneNumber(member.phone) === normalizedPhone
-    ) ?? null
-  );
 }
 
 export async function GET(req: Request) {
@@ -149,9 +108,9 @@ export async function POST(req: Request) {
     }
 
     const duplicateMember = await findDuplicateActiveMember(
-      admin.clubId,
       normalizedName,
-      normalizedPhone
+      normalizedPhone,
+      { clubId: admin.clubId }
     );
 
     if (duplicateMember) {
@@ -248,10 +207,9 @@ export async function PUT(req: Request) {
     }
 
     const duplicateMember = await findDuplicateActiveMember(
-      admin.clubId,
       normalizedName,
       normalizedPhone,
-      existingMember.id
+      { clubId: admin.clubId, excludeMemberId: existingMember.id }
     );
 
     if (duplicateMember) {
@@ -347,10 +305,9 @@ export async function PATCH(req: Request) {
     }
 
     const duplicateMember = await findDuplicateActiveMember(
-      admin.clubId,
       String(existingMember.name).trim(),
       formatPhoneNumber(existingMember.phone),
-      existingMember.id
+      { clubId: admin.clubId, excludeMemberId: existingMember.id }
     );
 
     if (duplicateMember) {

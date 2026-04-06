@@ -1,7 +1,5 @@
-import {
-  formatPhoneNumber,
-  normalizePhoneNumber,
-} from "@/lib/phone";
+import { findDuplicateActiveMember, findDuplicatePendingRequest } from "@/lib/member-identity";
+import { formatPhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -45,51 +43,15 @@ export async function POST(req: Request) {
       );
     }
 
-    const [pendingRequestCandidates, memberCandidates] =
+    const [existingPendingRequest, existingMember] =
       await Promise.all([
-        prisma.memberRequest.findMany({
-          where: {
-            clubId: club.id,
-            name,
-            status: "PENDING",
-          },
-          select: {
-            id: true,
-            phone: true,
-            createdAt: true,
-          },
+        findDuplicatePendingRequest(name, phone, {
+          clubId: club.id,
         }),
-        prisma.member.findMany({
-          where: {
-            clubId: club.id,
-            name,
-            deleted: false,
-          },
-          select: {
-            id: true,
-            phone: true,
-          },
+        findDuplicateActiveMember(name, phone, {
+          clubId: club.id,
         }),
       ]);
-
-    const normalizedPhone = normalizePhoneNumber(phone);
-
-    const existingPendingRequest =
-      pendingRequestCandidates
-        .filter(
-          (request) =>
-            normalizePhoneNumber(request.phone) === normalizedPhone
-        )
-        .sort(
-          (left, right) =>
-            right.createdAt.getTime() - left.createdAt.getTime()
-        )[0] ?? null;
-
-    const existingMember =
-      memberCandidates.find(
-        (member) =>
-          normalizePhoneNumber(member.phone) === normalizedPhone
-      ) ?? null;
 
     if (existingPendingRequest) {
       return NextResponse.json(

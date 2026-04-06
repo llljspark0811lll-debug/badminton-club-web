@@ -8,6 +8,7 @@ import {
   getNextRegistrationStatus,
   promoteWaitlistIfPossible,
 } from "@/lib/session-registration";
+import { hasSessionParticipantGuestProfileColumns } from "@/lib/session-participant-schema";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
@@ -28,8 +29,17 @@ export async function POST(req: Request) {
           id: parsedSessionId,
           clubId: admin.clubId,
         },
-        include: {
-          participants: true,
+        select: {
+          id: true,
+          capacity: true,
+          status: true,
+          participants: {
+            select: {
+              id: true,
+              memberId: true,
+              status: true,
+            },
+          },
         },
       }),
       prisma.member.findFirst({
@@ -59,19 +69,32 @@ export async function POST(req: Request) {
     const existingParticipant = session.participants.find(
       (participant) => participant.memberId === member.id
     );
+    const hasGuestProfileColumns =
+      await hasSessionParticipantGuestProfileColumns();
 
     if (
       existingParticipant &&
       existingParticipant.status !== "CANCELED"
     ) {
-      await prisma.sessionParticipant.update({
-        where: { id: existingParticipant.id },
-        data: {
-          status: "CANCELED",
-          attendanceStatus: "PENDING",
-          checkedInAt: null,
-        },
-      });
+      if (hasGuestProfileColumns) {
+        await prisma.sessionParticipant.update({
+          where: { id: existingParticipant.id },
+          data: {
+            status: "CANCELED",
+            attendanceStatus: "PENDING",
+            checkedInAt: null,
+          },
+        });
+      } else {
+        await prisma.sessionParticipant.updateMany({
+          where: { id: existingParticipant.id },
+          data: {
+            status: "CANCELED",
+            attendanceStatus: "PENDING",
+            checkedInAt: null,
+          },
+        });
+      }
 
       await promoteWaitlistIfPossible(prisma, session.id);
 
@@ -90,22 +113,45 @@ export async function POST(req: Request) {
     );
 
     if (existingParticipant) {
-      await prisma.sessionParticipant.update({
-        where: { id: existingParticipant.id },
-        data: {
-          status: nextStatus,
-          attendanceStatus: "PENDING",
-          checkedInAt: null,
-        },
-      });
+      if (hasGuestProfileColumns) {
+        await prisma.sessionParticipant.update({
+          where: { id: existingParticipant.id },
+          data: {
+            status: nextStatus,
+            attendanceStatus: "PENDING",
+            checkedInAt: null,
+          },
+        });
+      } else {
+        await prisma.sessionParticipant.updateMany({
+          where: { id: existingParticipant.id },
+          data: {
+            status: nextStatus,
+            attendanceStatus: "PENDING",
+            checkedInAt: null,
+          },
+        });
+      }
     } else {
-      await prisma.sessionParticipant.create({
-        data: {
-          sessionId: session.id,
-          memberId: member.id,
-          status: nextStatus,
-        },
-      });
+      if (hasGuestProfileColumns) {
+        await prisma.sessionParticipant.create({
+          data: {
+            sessionId: session.id,
+            memberId: member.id,
+            status: nextStatus,
+          },
+        });
+      } else {
+        await prisma.sessionParticipant.createMany({
+          data: [
+            {
+              sessionId: session.id,
+              memberId: member.id,
+              status: nextStatus,
+            },
+          ],
+        });
+      }
     }
 
     return NextResponse.json({
