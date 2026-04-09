@@ -669,8 +669,8 @@ export default function PublicSessionPage() {
         </section>
 
         <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-          <div className="flex flex-col gap-6 lg:flex-row">
-            <div className="flex-1">
+          <div>
+            <div>
               <h2 className="text-2xl font-black text-slate-900">참석 신청 / 취소</h2>
               <p className="mt-3 text-sm leading-6 text-slate-500">
                 처음 한 번만 이름과 전화번호 뒤 4자리로 본인 확인을 하면, 이후에는 같은 기기에서 자동으로 기억됩니다.
@@ -822,29 +822,6 @@ export default function PublicSessionPage() {
               )}
             </div>
 
-            <div className="lg:w-[320px]">
-              <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
-                <h3 className="text-lg font-black text-slate-900">빠르게 확인하는 핵심 수치</h3>
-                <div className="mt-4 grid grid-cols-2 gap-3">
-                  <div className="rounded-2xl bg-white p-4 shadow-sm">
-                    <div className="text-xs font-bold text-slate-400">회원 참석</div>
-                    <div className="mt-2 text-2xl font-black text-slate-900">{session.registeredMemberCount}</div>
-                  </div>
-                  <div className="rounded-2xl bg-white p-4 shadow-sm">
-                    <div className="text-xs font-bold text-slate-400">게스트 참석</div>
-                    <div className="mt-2 text-2xl font-black text-slate-900">{session.registeredGuestCount}</div>
-                  </div>
-                  <div className="rounded-2xl bg-white p-4 shadow-sm">
-                    <div className="text-xs font-bold text-slate-400">회원 대기</div>
-                    <div className="mt-2 text-2xl font-black text-slate-900">{session.waitlistMemberCount}</div>
-                  </div>
-                  <div className="rounded-2xl bg-white p-4 shadow-sm">
-                    <div className="text-xs font-bold text-slate-400">게스트 대기</div>
-                    <div className="mt-2 text-2xl font-black text-slate-900">{session.waitlistGuestCount}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
         </section>
 
