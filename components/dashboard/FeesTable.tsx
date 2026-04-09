@@ -206,8 +206,8 @@ export function FeesTable({
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-4 rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div>
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px_300px] xl:items-center">
+          <div className="min-w-0">
           <h3 className="text-lg font-black text-slate-900">
             연도별 회비 관리
           </h3>
@@ -218,7 +218,7 @@ export function FeesTable({
           </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 sm:min-w-[420px]">
+          <div className="grid grid-cols-2 gap-2 xl:w-full xl:max-w-[420px] xl:justify-self-center">
             <button
               onClick={() => setQuickFilter("ALL")}
               className={`rounded-xl px-3 py-2 text-xs font-bold transition ${
@@ -262,10 +262,7 @@ export function FeesTable({
               기준 월까지 완납만
             </button>
           </div>
-        </div>
-
-        <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row xl:justify-self-end">
             <select
               value={selectedYear}
               onChange={(event) =>

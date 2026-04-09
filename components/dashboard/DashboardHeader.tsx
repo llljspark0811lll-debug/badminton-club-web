@@ -28,7 +28,9 @@ export function DashboardHeader({
 
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <h1 className="text-3xl font-black text-slate-900">
-            {clubName} 운영 대시보드
+            {clubName} 
+            <br />
+            운영 대시보드
           </h1>
 
           <button
