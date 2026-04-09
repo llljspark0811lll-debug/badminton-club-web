@@ -22,7 +22,7 @@ export default function Home() {
               </p>
 
               <h1 className="text-base font-semibold leading-relaxed text-slate-600 sm:text-lg md:text-2xl">
-                전국 배드민턴 클럽
+                전국 배드민턴 클럽/소모임
                 <br />
                 자동 운영 관리 시스템
               </h1>

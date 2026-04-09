@@ -16,7 +16,11 @@ type FeesTableProps = {
   onMarkAllUnpaid: (memberId: number) => void;
 };
 
-type FeeQuickFilter = "ALL" | "UNPAID" | "PAID";
+type FeeQuickFilter =
+  | "ALL"
+  | "MONTH_UNPAID"
+  | "CUMULATIVE_UNPAID"
+  | "PAID";
 
 type FeeRowProps = {
   member: FeeMember;
@@ -139,6 +143,9 @@ export function FeesTable({
 }: FeesTableProps) {
   const [quickFilter, setQuickFilter] =
     useState<FeeQuickFilter>("ALL");
+  const [referenceMonth, setReferenceMonth] = useState(
+    new Date().getMonth() + 1
+  );
 
   const yearOptions = useMemo(
     () => getYearOptions(selectedYear),
@@ -178,30 +185,40 @@ export function FeesTable({
     return members.filter((member) => {
       const monthStates =
         memberMonthStates.get(member.id) ?? EMPTY_MONTH_STATES;
-      const paidMonths = monthStates.filter(Boolean).length;
+      const paidCountUntilReferenceMonth = monthStates
+        .slice(0, referenceMonth)
+        .filter(Boolean).length;
+      const isReferenceMonthPaid =
+        monthStates[referenceMonth - 1] ?? false;
 
-      if (quickFilter === "UNPAID") {
-        return paidMonths < 12;
+      if (quickFilter === "MONTH_UNPAID") {
+        return !isReferenceMonthPaid;
       }
 
-      return paidMonths === 12;
+      if (quickFilter === "CUMULATIVE_UNPAID") {
+        return paidCountUntilReferenceMonth < referenceMonth;
+      }
+
+      return paidCountUntilReferenceMonth === referenceMonth;
     });
-  }, [memberMonthStates, members, quickFilter]);
+  }, [memberMonthStates, members, quickFilter, referenceMonth]);
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-4 rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
-        <div>
+      <div className="flex flex-col gap-4 rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div>
           <h3 className="text-lg font-black text-slate-900">
             연도별 회비 관리
           </h3>
-          <p className="text-sm text-slate-500">
-            월별 납부 상태를 빠르게 체크할 수 있어요.
+          <p className="mt-1 text-sm leading-6 text-slate-500">
+            기준 월을 직접 선택해서 해당 월 미납과 누적 미납 회원을
+            <br />
+            빠르게 확인할 수 있어요.
           </p>
-        </div>
+          </div>
 
-        <div className="flex flex-col gap-3 md:flex-row md:items-center">
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:min-w-[420px]">
             <button
               onClick={() => setQuickFilter("ALL")}
               className={`rounded-xl px-3 py-2 text-xs font-bold transition ${
@@ -213,14 +230,26 @@ export function FeesTable({
               전체 보기
             </button>
             <button
-              onClick={() => setQuickFilter("UNPAID")}
+              onClick={() => setQuickFilter("MONTH_UNPAID")}
               className={`rounded-xl px-3 py-2 text-xs font-bold transition ${
-                quickFilter === "UNPAID"
+                quickFilter === "MONTH_UNPAID"
                   ? "bg-rose-600 text-white"
                   : "bg-rose-50 text-rose-700 hover:bg-rose-100"
               }`}
             >
-              미납 회원만
+              해당 월 미납만
+            </button>
+            <button
+              onClick={() =>
+                setQuickFilter("CUMULATIVE_UNPAID")
+              }
+              className={`rounded-xl px-3 py-2 text-xs font-bold transition ${
+                quickFilter === "CUMULATIVE_UNPAID"
+                  ? "bg-orange-500 text-white"
+                  : "bg-orange-50 text-orange-700 hover:bg-orange-100"
+              }`}
+            >
+              누적 미납만
             </button>
             <button
               onClick={() => setQuickFilter("PAID")}
@@ -230,23 +259,43 @@ export function FeesTable({
                   : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
               }`}
             >
-              전액 납부만
+              기준 월까지 완납만
             </button>
           </div>
+        </div>
 
-          <select
-            value={selectedYear}
-            onChange={(event) =>
-              onChangeYear(Number(event.target.value))
-            }
-            className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none transition focus:border-sky-400 md:w-36"
-          >
-            {yearOptions.map((year) => (
-              <option key={year} value={year}>
-                {year}년
-              </option>
-            ))}
-          </select>
+        <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+          <div className="flex gap-3">
+            <select
+              value={selectedYear}
+              onChange={(event) =>
+                onChangeYear(Number(event.target.value))
+              }
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none transition focus:border-sky-400 sm:w-36"
+              aria-label="회비 연도 선택"
+            >
+              {yearOptions.map((year) => (
+                <option key={year} value={year}>
+                  {year}년
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={referenceMonth}
+              onChange={(event) =>
+                setReferenceMonth(Number(event.target.value))
+              }
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none transition focus:border-sky-400 sm:w-36"
+              aria-label="회비 기준 월 선택"
+            >
+              {MONTHS.map((month) => (
+                <option key={month} value={month}>
+                  기준 월 {month}월
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -289,7 +338,7 @@ export function FeesTable({
                     colSpan={14}
                     className="px-4 py-12 text-center text-sm text-slate-400"
                   >
-                    회비를 관리할 회원이 없습니다.
+                    선택한 기준에 맞는 회원이 없습니다.
                   </td>
                 </tr>
               ) : null}
