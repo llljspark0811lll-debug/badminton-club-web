@@ -36,6 +36,16 @@ type SessionData = {
   waitlistedParticipants: Participant[];
 };
 
+type SessionComment = {
+  id: number;
+  content: string;
+  createdAt: string;
+  member: {
+    id: number;
+    name: string;
+  };
+};
+
 type GuestDraft = {
   name: string;
   age: string;
@@ -80,6 +90,18 @@ function formatDate(value: string) {
     month: "long",
     day: "numeric",
     weekday: "short",
+  });
+}
+
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("ko-KR", {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
   });
 }
 
@@ -316,6 +338,42 @@ function ParticipantGroups({
   );
 }
 
+function getPaginationItems(currentPage: number, totalPages: number) {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const pages = new Set<number>([1, totalPages, currentPage - 1, currentPage, currentPage + 1]);
+
+  if (currentPage <= 3) {
+    pages.add(2);
+    pages.add(3);
+    pages.add(4);
+  }
+
+  if (currentPage >= totalPages - 2) {
+    pages.add(totalPages - 1);
+    pages.add(totalPages - 2);
+    pages.add(totalPages - 3);
+  }
+
+  const sorted = [...pages].filter((page) => page >= 1 && page <= totalPages).sort((a, b) => a - b);
+  const items: Array<number | string> = [];
+
+  for (let index = 0; index < sorted.length; index += 1) {
+    const page = sorted[index];
+    const previous = sorted[index - 1];
+
+    if (previous && page - previous > 1) {
+      items.push(`ellipsis-${previous}-${page}`);
+    }
+
+    items.push(page);
+  }
+
+  return items;
+}
+
 export default function PublicSessionPage() {
   const params = useParams();
   const token = String(params?.token ?? "");
@@ -332,6 +390,17 @@ export default function PublicSessionPage() {
   const [identifyError, setIdentifyError] = useState("");
   const [submitLoading, setSubmitLoading] = useState(false);
   const [submitSuccessMessage, setSubmitSuccessMessage] = useState("");
+  const [commentInput, setCommentInput] = useState("");
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
+  const [commentMessage, setCommentMessage] = useState("");
+  const [commentSubmitError, setCommentSubmitError] = useState("");
+  const [commentListError, setCommentListError] = useState("");
+  const [commentDeletingId, setCommentDeletingId] = useState<number | null>(null);
+  const [comments, setComments] = useState<SessionComment[]>([]);
+  const [commentsLoading, setCommentsLoading] = useState(true);
+  const [commentsPage, setCommentsPage] = useState(1);
+  const [commentsTotalPages, setCommentsTotalPages] = useState(1);
+  const [commentsTotalCount, setCommentsTotalCount] = useState(0);
 
   const rememberStorageKey = storageKey(token);
 
@@ -355,6 +424,48 @@ export default function PublicSessionPage() {
       );
     } finally {
       setLoadingSession(false);
+    }
+  }
+
+  async function fetchComments(
+    targetPage = commentsPage,
+    options?: { silent?: boolean }
+  ) {
+    if (!token) return;
+
+    try {
+      if (!options?.silent) {
+        setCommentsLoading(true);
+      }
+      if (!options?.silent) {
+        setCommentListError("");
+      }
+
+      const response = await fetch(
+        `/api/public/sessions/comments?token=${encodeURIComponent(token)}&page=${targetPage}`,
+        { cache: "no-store" }
+      );
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "댓글을 불러오지 못했습니다.");
+      }
+
+      setCommentListError("");
+      setComments(data.comments ?? []);
+      setCommentsPage(data.page ?? targetPage);
+      setCommentsTotalPages(data.totalPages ?? 1);
+      setCommentsTotalCount(data.totalCount ?? 0);
+    } catch (error) {
+      if (!options?.silent) {
+        setCommentListError(
+          error instanceof Error ? error.message : "댓글을 불러오지 못했습니다."
+        );
+      }
+    } finally {
+      if (!options?.silent) {
+        setCommentsLoading(false);
+      }
     }
   }
 
@@ -435,6 +546,7 @@ export default function PublicSessionPage() {
 
   useEffect(() => {
     fetchSessionData().catch(() => undefined);
+    fetchComments(1).catch(() => undefined);
 
     const rememberToken = localStorage.getItem(rememberStorageKey);
     if (rememberToken) {
@@ -447,13 +559,20 @@ export default function PublicSessionPage() {
 
   useEffect(() => {
     if (!token) return;
+    fetchComments(commentsPage).catch(() => undefined);
+  }, [commentsPage, token]);
+
+  useEffect(() => {
+    if (!token) return;
 
     const interval = window.setInterval(() => {
       fetchSessionData().catch(() => undefined);
+      fetchComments(commentsPage, { silent: true }).catch(() => undefined);
     }, 5000);
 
     const handleFocus = () => {
       fetchSessionData().catch(() => undefined);
+      fetchComments(commentsPage, { silent: true }).catch(() => undefined);
     };
 
     window.addEventListener("focus", handleFocus);
@@ -462,7 +581,7 @@ export default function PublicSessionPage() {
       window.clearInterval(interval);
       window.removeEventListener("focus", handleFocus);
     };
-  }, [rememberStorageKey, token]);
+  }, [commentsPage, rememberStorageKey, token]);
 
   async function handleRespond(action: "REGISTER" | "CANCEL") {
     if (!identifiedMember) return;
@@ -528,6 +647,114 @@ export default function PublicSessionPage() {
     }
   }
 
+  async function handleCommentSubmit() {
+    if (!identifiedMember) {
+      setCommentSubmitError("본인 확인 후 댓글을 작성할 수 있습니다.");
+      return;
+    }
+
+    const content = commentInput.trim();
+    const rememberToken = localStorage.getItem(rememberStorageKey);
+
+    if (!rememberToken) {
+      setCommentSubmitError("회원 자동 인식 정보가 없습니다. 다시 확인해주세요.");
+      return;
+    }
+
+    if (!content) {
+      setCommentSubmitError("댓글 내용을 입력해주세요.");
+      return;
+    }
+
+    try {
+      setCommentSubmitting(true);
+      setCommentSubmitError("");
+      setCommentMessage("");
+
+      const response = await fetch("/api/public/sessions/comments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          rememberToken,
+          content,
+        }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "댓글을 등록하지 못했습니다.");
+      }
+
+      setCommentInput("");
+      setCommentMessage(
+        `${data.authorName ?? identifiedMember.name} 님의 댓글이 등록되었습니다.`
+      );
+      setCommentsPage(1);
+      await fetchComments(1);
+    } catch (error) {
+      setCommentSubmitError(
+        error instanceof Error ? error.message : "댓글을 등록하지 못했습니다."
+      );
+    } finally {
+      setCommentSubmitting(false);
+    }
+  }
+
+  async function handleCommentDelete(commentId: number) {
+    if (!identifiedMember) {
+      setCommentSubmitError("본인 확인 후 댓글을 삭제할 수 있습니다.");
+      return;
+    }
+
+    const rememberToken = localStorage.getItem(rememberStorageKey);
+
+    if (!rememberToken) {
+      setCommentSubmitError("회원 자동 인식 정보가 없습니다. 다시 확인해주세요.");
+      return;
+    }
+
+    try {
+      setCommentDeletingId(commentId);
+      setCommentSubmitError("");
+      setCommentMessage("");
+
+      const response = await fetch("/api/public/sessions/comments", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          rememberToken,
+          commentId,
+        }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "댓글을 삭제하지 못했습니다.");
+      }
+
+      const nextPage =
+        comments.length === 1 && commentsPage > 1 ? commentsPage - 1 : commentsPage;
+
+      setCommentMessage(
+        `${data.authorName ?? identifiedMember.name} 님의 댓글을 삭제했습니다.`
+      );
+
+      if (nextPage !== commentsPage) {
+        setCommentsPage(nextPage);
+      }
+
+      await fetchComments(nextPage);
+    } catch (error) {
+      setCommentSubmitError(
+        error instanceof Error ? error.message : "댓글을 삭제하지 못했습니다."
+      );
+    } finally {
+      setCommentDeletingId(null);
+    }
+  }
+
   const registeredMembers = useMemo(
     () =>
       (session?.registeredParticipants ?? []).filter(
@@ -563,6 +790,10 @@ export default function PublicSessionPage() {
       : identifiedMember?.currentStatus === "WAITLIST"
       ? "현재 대기 인원으로 등록되어 있습니다."
       : "아직 참석 신청 전입니다.";
+  const commentPaginationItems = useMemo(
+    () => getPaginationItems(commentsPage, commentsTotalPages),
+    [commentsPage, commentsTotalPages]
+  );
 
   if (loadingSession) {
     return (
@@ -818,11 +1049,155 @@ export default function PublicSessionPage() {
                       신청 취소하기
                     </button>
                   </div>
+
+                  <div className="rounded-[1.5rem] border border-slate-200 p-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-lg font-black text-slate-900">댓글</h3>
+                        <p className="mt-1 text-sm text-slate-500">
+                          게스트 요청, 콕 구매, 특이사항 같은 내용을 자유롭게 남겨주세요.
+                        </p>
+                        {identifiedMember ? (
+                          <p className="mt-2 text-xs font-semibold text-slate-400">
+                            현재 {identifiedMember.name} 님 이름으로 댓글이 등록됩니다.
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="text-xs font-semibold text-slate-400">
+                        {commentsTotalCount}개
+                      </div>
+                    </div>
+                    <div className="mt-4 space-y-3">
+                      <textarea
+                        value={commentInput}
+                        onChange={(event) => setCommentInput(event.target.value.slice(0, 300))}
+                        rows={3}
+                        placeholder={
+                          identifiedMember
+                            ? "댓글을 입력해주세요."
+                            : "본인 확인 후 댓글을 작성할 수 있습니다."
+                        }
+                        disabled={!identifiedMember || commentSubmitting}
+                        className="w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-sky-400 disabled:bg-slate-50 disabled:text-slate-400"
+                      />
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-xs text-slate-400">{commentInput.length}/300</div>
+                        <button
+                          onClick={() => {
+                            handleCommentSubmit().catch(() => undefined);
+                          }}
+                          disabled={!identifiedMember || commentSubmitting}
+                          className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                        >
+                          {commentSubmitting ? "등록 중..." : "댓글 등록"}
+                        </button>
+                      </div>
+                      {commentMessage ? (
+                        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+                          {commentMessage}
+                        </div>
+                      ) : null}
+                      {commentSubmitError ? (
+                        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+                          {commentSubmitError}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
 
           </div>
+        </section>
+
+        <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-2xl font-black text-slate-900">참석 관련 댓글</h2>
+            </div>
+            <div className="rounded-full bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700">
+              총 {commentsTotalCount}개
+            </div>
+          </div>
+
+          {commentsLoading ? (
+            <div className="mt-6 rounded-[1.5rem] border border-dashed border-slate-200 bg-slate-50 px-5 py-10 text-center text-sm text-slate-400">
+              댓글을 불러오는 중입니다.
+            </div>
+          ) : comments.length === 0 ? (
+            <div className="mt-6 rounded-[1.5rem] border border-dashed border-slate-200 bg-slate-50 px-5 py-10 text-center text-sm text-slate-400">
+              아직 등록된 댓글이 없습니다.
+            </div>
+          ) : (
+            <div className="mt-6 space-y-4">
+              {comments.map((comment) => (
+                <article
+                  key={comment.id}
+                  className="rounded-[1.5rem] border border-slate-200 bg-slate-50 px-5 py-4"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="text-sm font-black text-slate-900">
+                      {comment.member.name}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-xs font-semibold text-slate-400">
+                        {formatDateTime(comment.createdAt)}
+                      </div>
+                      {identifiedMember?.id === comment.member.id ? (
+                        <button
+                          onClick={() => {
+                            const confirmed = window.confirm(
+                              "댓글을 삭제하시겠습니까?"
+                            );
+                            if (!confirmed) return;
+                            handleCommentDelete(comment.id).catch(() => undefined);
+                          }}
+                          disabled={commentDeletingId === comment.id}
+                          className="rounded-full border border-rose-200 bg-white px-3 py-1 text-xs font-bold text-rose-500 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:text-rose-300"
+                        >
+                          {commentDeletingId === comment.id ? "삭제 중..." : "삭제"}
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                  <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-slate-600">
+                    {comment.content}
+                  </p>
+                </article>
+              ))}
+            </div>
+          )}
+
+          {commentListError ? (
+            <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+              {commentListError}
+            </div>
+          ) : null}
+
+          {commentsTotalPages > 1 ? (
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+              {commentPaginationItems.map((item) =>
+                typeof item === "string" ? (
+                  <span key={item} className="px-2 text-sm font-semibold text-slate-300">
+                    ...
+                  </span>
+                ) : (
+                  <button
+                    key={item}
+                    onClick={() => setCommentsPage(item)}
+                    className={`rounded-full px-4 py-2 text-sm font-bold transition ${
+                      item === commentsPage
+                        ? "bg-slate-900 text-white"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    {item}
+                  </button>
+                )
+              )}
+            </div>
+          ) : null}
         </section>
 
         <ParticipantGroups title="회원 참석 현황" participants={registeredMembers} emptyMessage="아직 참석 신청한 회원이 없습니다." />

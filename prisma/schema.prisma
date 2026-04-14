@@ -60,6 +60,7 @@ model Member {
   club   Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
 
   fees                    Fee[]
+  sessionComments         SessionComment[]
   sessionParticipants     SessionParticipant[] @relation("SessionMember")
   hostedGuestParticipants SessionParticipant[] @relation("GuestHost")
   specialFeePayments      SpecialFeePayment[]
@@ -165,7 +166,22 @@ model ClubSession {
   clubId Int
   club   Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
 
+  comments     SessionComment[]
   participants SessionParticipant[]
+}
+
+model SessionComment {
+  id        Int      @id @default(autoincrement())
+  content   String
+  createdAt DateTime @default(now())
+
+  sessionId Int
+  session   ClubSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  memberId Int
+  member   Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
 }
 
 model SessionParticipant {
