@@ -86,6 +86,9 @@ async function findSessionDetail(sessionId: number, clubId: number) {
                 id: true,
                 name: true,
                 phone: true,
+                gender: true,
+                level: true,
+                note: true,
               },
             },
             hostMember: {
@@ -125,6 +128,9 @@ async function findSessionDetail(sessionId: number, clubId: number) {
               id: true,
               name: true,
               phone: true,
+              gender: true,
+              level: true,
+              note: true,
             },
           },
           hostMember: {

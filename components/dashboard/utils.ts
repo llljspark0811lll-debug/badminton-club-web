@@ -209,3 +209,43 @@ export function isGuestParticipant(
 ) {
   return Boolean(participant.guestName);
 }
+
+export function getParticipantGenderLabel(
+  participant: SessionParticipant
+) {
+  if (participant.guestName) {
+    return normalizeGenderLabel(participant.guestGender);
+  }
+
+  return normalizeGenderLabel(participant.member?.gender);
+}
+
+export function getParticipantLevelLabel(
+  participant: SessionParticipant
+) {
+  if (participant.guestName) {
+    return participant.guestLevel?.trim() || "-";
+  }
+
+  return participant.member?.level?.trim() || "-";
+}
+
+export function getParticipantRemarkText(
+  participant: SessionParticipant
+) {
+  if (participant.guestName) {
+    const notes = [];
+
+    if (participant.guestAge) {
+      notes.push(`${participant.guestAge}세`);
+    }
+
+    if (participant.hostMember?.name) {
+      notes.push(`동반 회원 ${participant.hostMember.name}`);
+    }
+
+    return notes.join(" · ") || "-";
+  }
+
+  return participant.member?.note?.trim() || "-";
+}
