@@ -39,6 +39,8 @@ const initialForm = {
   description: "",
 };
 
+const SPECIAL_FEE_LIST_PAGE_SIZE = 5;
+
 export function SpecialFeesPanel({
   members,
   specialFees,
@@ -54,6 +56,7 @@ export function SpecialFeesPanel({
   const [deleting, setDeleting] = useState(false);
   const [quickFilter, setQuickFilter] =
     useState<SpecialFeeQuickFilter>("ALL");
+  const [specialFeeListPage, setSpecialFeeListPage] = useState(1);
 
   const effectiveSelectedFeeId =
     selectedFeeId ?? specialFees[0]?.id ?? null;
@@ -78,6 +81,47 @@ export function SpecialFeesPanel({
       onSelectFee(specialFees[0].id);
     }
   }, [onSelectFee, selectedFeeId, specialFees]);
+
+  useEffect(() => {
+    const totalPages = Math.max(
+      1,
+      Math.ceil(specialFees.length / SPECIAL_FEE_LIST_PAGE_SIZE)
+    );
+
+    setSpecialFeeListPage((current) => Math.min(current, totalPages));
+  }, [specialFees.length]);
+
+  useEffect(() => {
+    if (!effectiveSelectedFeeId) {
+      return;
+    }
+
+    const selectedIndex = specialFees.findIndex(
+      (specialFee) => specialFee.id === effectiveSelectedFeeId
+    );
+
+    if (selectedIndex === -1) {
+      return;
+    }
+
+    setSpecialFeeListPage(
+      Math.floor(selectedIndex / SPECIAL_FEE_LIST_PAGE_SIZE) + 1
+    );
+  }, [effectiveSelectedFeeId, specialFees]);
+
+  const specialFeeListTotalPages = Math.max(
+    1,
+    Math.ceil(specialFees.length / SPECIAL_FEE_LIST_PAGE_SIZE)
+  );
+  const paginatedSpecialFees = useMemo(() => {
+    const startIndex =
+      (specialFeeListPage - 1) * SPECIAL_FEE_LIST_PAGE_SIZE;
+
+    return specialFees.slice(
+      startIndex,
+      startIndex + SPECIAL_FEE_LIST_PAGE_SIZE
+    );
+  }, [specialFeeListPage, specialFees]);
 
   const selectedPayments = useMemo(() => {
     if (!displayFee?.payments) {
@@ -217,7 +261,7 @@ export function SpecialFeesPanel({
             수시회비 목록
           </h3>
           <div className="mt-4 space-y-2.5 sm:space-y-3">
-            {specialFees.map((specialFee) => (
+            {paginatedSpecialFees.map((specialFee) => (
               <button
                 key={specialFee.id}
                 onClick={() => onSelectFee(specialFee.id)}
@@ -249,6 +293,37 @@ export function SpecialFeesPanel({
               </p>
             ) : null}
           </div>
+
+
+          {specialFees.length > SPECIAL_FEE_LIST_PAGE_SIZE ? (
+            <div className="mt-4 flex items-center justify-center gap-2">
+              <button
+                onClick={() =>
+                  setSpecialFeeListPage((current) =>
+                    Math.max(1, current - 1)
+                  )
+                }
+                disabled={specialFeeListPage === 1}
+                className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {"<"}
+              </button>
+              <span className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700">
+                {specialFeeListPage} / {specialFeeListTotalPages}
+              </span>
+              <button
+                onClick={() =>
+                  setSpecialFeeListPage((current) =>
+                    Math.min(specialFeeListTotalPages, current + 1)
+                  )
+                }
+                disabled={specialFeeListPage === specialFeeListTotalPages}
+                className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {">"}
+              </button>
+            </div>
+          ) : null}
         </section>
       </div>
 

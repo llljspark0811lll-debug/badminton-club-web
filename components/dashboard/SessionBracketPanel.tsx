@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import type {
@@ -6,6 +6,10 @@ import type {
   SessionBracket,
 } from "@/components/dashboard/types";
 import { normalizeGenderLabel } from "@/components/dashboard/utils";
+import {
+  buildBracketImageFiles,
+  downloadFiles,
+} from "@/components/dashboard/session-bracket-export";
 
 type SessionBracketPanelProps = {
   session: ClubSession;
@@ -57,6 +61,11 @@ export function SessionBracketPanel({
   const [bracket, setBracket] = useState<SessionBracket | null>(
     null
   );
+  const [exportMessage, setExportMessage] = useState("");
+  const [exportError, setExportError] = useState("");
+  const [exportingMode, setExportingMode] = useState<
+    "download" | null
+  >(null);
 
   const registeredCount =
     session.registeredCount ??
@@ -73,6 +82,9 @@ export function SessionBracketPanel({
     setError("");
     setBracket(null);
     setLoaded(false);
+    setExportMessage("");
+    setExportError("");
+    setExportingMode(null);
   }, [session.id]);
 
   useEffect(() => {
@@ -149,6 +161,8 @@ export function SessionBracketPanel({
   async function handleGenerateBracket() {
     setLoading(true);
     setError("");
+    setExportMessage("");
+    setExportError("");
 
     try {
       const response = await fetch("/api/sessions/bracket", {
@@ -188,8 +202,47 @@ export function SessionBracketPanel({
     }
   }
 
+  async function handleExport() {
+    if (!bracket) {
+      setExportError("내보낼 대진표가 아직 준비되지 않았습니다.");
+      return;
+    }
+
+    setExportMessage("");
+    setExportError("");
+    setExportingMode("download");
+
+    try {
+      const files = await buildBracketImageFiles(session, bracket);
+
+      downloadFiles(files);
+      setExportMessage(
+        files.length > 1
+          ? `대진표 이미지 ${files.length}장을 저장했습니다.`
+          : "대진표 이미지를 저장했습니다."
+      );
+    } catch (exportErr) {
+      if (
+        exportErr instanceof DOMException &&
+        exportErr.name === "AbortError"
+      ) {
+        setExportingMode(null);
+        return;
+      }
+
+      setExportError(
+        exportErr instanceof Error
+          ? exportErr.message
+          : "대진표 이미지를 처리하지 못했습니다."
+      );
+    } finally {
+      setExportingMode(null);
+    }
+  }
+
   return (
-    <section className="overflow-hidden rounded-[1.5rem] border border-slate-200">
+    <>
+      <section className="overflow-hidden rounded-[1.5rem] border border-slate-200">
       <div className="border-b border-slate-200 bg-slate-50 px-3 py-3 md:px-4 md:py-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -300,11 +353,35 @@ export function SessionBracketPanel({
                 ? "대진표 다시 생성"
                 : "자동 대진표 생성"}
           </button>
+          <button
+            onClick={() => {
+              handleExport().catch(() => undefined);
+            }}
+            disabled={!bracket || loading || exportingMode !== null}
+            className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+          >
+            {exportingMode === "download"
+              ? "이미지 준비 중..."
+              : "이미지 저장"}
+          </button>
+
         </div>
 
         {error ? (
           <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium leading-6 text-rose-700">
             {error}
+          </div>
+        ) : null}
+
+        {exportError ? (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium leading-6 text-rose-700">
+            {exportError}
+          </div>
+        ) : null}
+
+        {exportMessage ? (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium leading-6 text-emerald-700">
+            {exportMessage}
           </div>
         ) : null}
 
@@ -506,5 +583,7 @@ export function SessionBracketPanel({
         ) : null}
       </div>
     </section>
+    </>
   );
 }
+

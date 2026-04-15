@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import type {
@@ -79,6 +79,8 @@ type ParticipantSectionProps = {
   >;
   emptyMessage: string;
 };
+
+const SESSION_LIST_PAGE_SIZE = 5;
 
 const SESSION_STATUS_LABEL: Record<ClubSession["status"], string> = {
   OPEN: "모집 중",
@@ -558,6 +560,7 @@ export function SessionsPanel({
   const [waitlistedFilters, setWaitlistedFilters] = useState(
     initialParticipantFilters
   );
+  const [sessionListPage, setSessionListPage] = useState(1);
 
   const hasSelectedSession = sessions.some(
     (session) => session.id === selectedSessionId
@@ -573,6 +576,47 @@ export function SessionsPanel({
       onSelectSession(sessions[0].id);
     }
   }, [hasSelectedSession, onSelectSession, sessions]);
+
+  useEffect(() => {
+    const totalPages = Math.max(
+      1,
+      Math.ceil(sessions.length / SESSION_LIST_PAGE_SIZE)
+    );
+
+    setSessionListPage((current) => Math.min(current, totalPages));
+  }, [sessions.length]);
+
+  useEffect(() => {
+    if (!selectedSessionId) {
+      return;
+    }
+
+    const selectedIndex = sessions.findIndex(
+      (session) => session.id === selectedSessionId
+    );
+
+    if (selectedIndex === -1) {
+      return;
+    }
+
+    setSessionListPage(
+      Math.floor(selectedIndex / SESSION_LIST_PAGE_SIZE) + 1
+    );
+  }, [selectedSessionId, sessions]);
+
+  const sessionListTotalPages = Math.max(
+    1,
+    Math.ceil(sessions.length / SESSION_LIST_PAGE_SIZE)
+  );
+  const paginatedSessions = useMemo(() => {
+    const startIndex =
+      (sessionListPage - 1) * SESSION_LIST_PAGE_SIZE;
+
+    return sessions.slice(
+      startIndex,
+      startIndex + SESSION_LIST_PAGE_SIZE
+    );
+  }, [sessionListPage, sessions]);
 
   const publicSessionLink = useMemo(() => {
     if (!selectedSession) {
@@ -862,7 +906,7 @@ export function SessionsPanel({
           </div>
 
           <div className="mt-4 space-y-3">
-            {sessions.map((session) => {
+            {paginatedSessions.map((session) => {
               const isSelected = selectedSession?.id === session.id;
 
               return (
@@ -907,6 +951,37 @@ export function SessionsPanel({
               </p>
             ) : null}
           </div>
+
+
+          {sessions.length > SESSION_LIST_PAGE_SIZE ? (
+            <div className="mt-4 flex items-center justify-center gap-2">
+              <button
+                onClick={() =>
+                  setSessionListPage((current) =>
+                    Math.max(1, current - 1)
+                  )
+                }
+                disabled={sessionListPage === 1}
+                className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {"<"}
+              </button>
+              <span className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700">
+                {sessionListPage} / {sessionListTotalPages}
+              </span>
+              <button
+                onClick={() =>
+                  setSessionListPage((current) =>
+                    Math.min(sessionListTotalPages, current + 1)
+                  )
+                }
+                disabled={sessionListPage === sessionListTotalPages}
+                className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {">"}
+              </button>
+            </div>
+          ) : null}
         </section>
       </div>
 
@@ -1093,3 +1168,4 @@ export function SessionsPanel({
     </div>
   );
 }
+
