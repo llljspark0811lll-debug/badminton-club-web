@@ -60,6 +60,7 @@ type ParticipantSortOption = "name" | "gender" | "level" | "recent";
 
 type ParticipantFilterState = {
   searchQuery: string;
+  typeFilter: string;
   genderFilter: string;
   levelFilter: string;
   sortOption: ParticipantSortOption;
@@ -97,6 +98,7 @@ const initialForm: SessionFormPayload = {
 
 const initialParticipantFilters: ParticipantFilterState = {
   searchQuery: "",
+  typeFilter: "ALL",
   genderFilter: "ALL",
   levelFilter: "ALL",
   sortOption: "name",
@@ -208,6 +210,12 @@ function filterParticipants(
         remark.toLowerCase().includes(query) ||
         gender.toLowerCase().includes(query) ||
         level.toLowerCase().includes(query);
+      const participantType = isGuestParticipant(participant)
+        ? "GUEST"
+        : "MEMBER";
+      const matchesType =
+        filters.typeFilter === "ALL" ||
+        participantType === filters.typeFilter;
 
       const matchesGender =
         filters.genderFilter === "ALL" ||
@@ -216,7 +224,12 @@ function filterParticipants(
         filters.levelFilter === "ALL" ||
         level === filters.levelFilter;
 
-      return matchesSearch && matchesGender && matchesLevel;
+      return (
+        matchesSearch &&
+        matchesType &&
+        matchesGender &&
+        matchesLevel
+      );
     })
     .sort((left, right) => {
       if (filters.sortOption === "gender") {
@@ -345,7 +358,7 @@ function ParticipantSection({
 
         {renderParticipantSummaryChips(summary)}
 
-        <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4 md:gap-3">
+        <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-5 md:gap-3">
           <input
             value={filters.searchQuery}
             onChange={(event) =>
@@ -357,6 +370,21 @@ function ParticipantSection({
             placeholder="이름, 비고 검색"
             className="col-span-2 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none transition focus:border-sky-400 md:col-span-1 md:px-4 md:py-3 md:text-sm"
           />
+
+          <select
+            value={filters.typeFilter}
+            onChange={(event) =>
+              setFilters((current) => ({
+                ...current,
+                typeFilter: event.target.value,
+              }))
+            }
+            className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none transition focus:border-sky-400 md:px-4 md:py-3 md:text-sm"
+          >
+            <option value="ALL">전체 구분</option>
+            <option value="MEMBER">회원만</option>
+            <option value="GUEST">게스트만</option>
+          </select>
 
           <select
             value={filters.genderFilter}
