@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { ClubSession } from "@/components/dashboard/types";
+import { SessionBracketPanel } from "@/components/dashboard/SessionBracketPanel";
 import {
   formatDate,
   getParticipantDisplayName,
@@ -451,7 +452,7 @@ export function SessionsPanel({
                   >
                     수정
                   </button>
-                  {(["OPEN", "CLOSED", "CANCELED"] as const).map(
+                  {(["OPEN", "CLOSED"] as const).map(
                     (status) => (
                       <button
                         key={status}
@@ -711,6 +712,8 @@ export function SessionsPanel({
                     </table>
                   </div>
                 </section>
+
+                <SessionBracketPanel session={selectedSession} />
               </div>
             )}
           </>

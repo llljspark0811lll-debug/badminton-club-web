@@ -102,6 +102,68 @@ export interface ClubSession {
   registeredCount?: number;
   waitlistedCount?: number;
   participants?: SessionParticipant[];
+  bracket?: SessionBracket | null;
+}
+
+export interface SessionBracketConfig {
+  courtCount: number;
+  minGamesPerPlayer: number;
+  separateByGender: boolean;
+}
+
+export interface SessionBracketPlayerEntry {
+  playerId: string;
+  participantId: number;
+  name: string;
+  gender: string;
+  level: string;
+  score: number;
+  isGuest: boolean;
+  hostName: string | null;
+}
+
+export interface SessionBracketPlayerStat
+  extends SessionBracketPlayerEntry {
+  games: number;
+  rests: number;
+}
+
+export interface SessionBracketTeam {
+  players: SessionBracketPlayerEntry[];
+  totalScore: number;
+}
+
+export interface SessionBracketMatch {
+  courtNumber: number;
+  label: string;
+  division: "ALL" | "MEN" | "WOMEN";
+  teamA: SessionBracketTeam;
+  teamB: SessionBracketTeam;
+  balanceGap: number;
+}
+
+export interface SessionBracketRound {
+  roundNumber: number;
+  matches: SessionBracketMatch[];
+  restingPlayers: SessionBracketPlayerEntry[];
+}
+
+export interface SessionBracketSummary {
+  totalPlayers: number;
+  totalRounds: number;
+  totalMatches: number;
+  warnings: string[];
+  playerStats: SessionBracketPlayerStat[];
+}
+
+export interface SessionBracket {
+  id: number;
+  sessionId: number;
+  config: SessionBracketConfig;
+  rounds: SessionBracketRound[];
+  summary: SessionBracketSummary;
+  createdAt: string | Date;
+  updatedAt: string | Date;
 }
 
 export interface ClubInfo {
