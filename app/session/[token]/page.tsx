@@ -637,6 +637,7 @@ export default function PublicSessionPage() {
             : "참석 신청이 완료되었습니다.";
 
       setSubmitSuccessMessage(successMessage);
+      alert(successMessage);
     } catch (error) {
       setSubmitSuccessMessage("");
       alert(
