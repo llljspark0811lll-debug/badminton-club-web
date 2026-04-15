@@ -414,10 +414,10 @@ function ParticipantSection({
         <table className="w-full table-fixed text-[10px] sm:text-[11px] md:text-sm">
           <thead className="bg-white text-left text-slate-500">
             <tr>
-              <th className="w-[22%] px-2 py-3 font-semibold md:px-4 md:py-4">
+              <th className="w-[20%] px-2 py-3 font-semibold md:px-4 md:py-4">
                 이름
               </th>
-              <th className="w-[14%] px-1.5 py-3 text-center font-semibold md:px-4 md:py-4">
+              <th className="w-[18%] px-1 py-3 text-center font-semibold md:px-4 md:py-4">
                 구분
               </th>
               <th className="w-[14%] px-1.5 py-3 text-center font-semibold md:px-4 md:py-4">
@@ -446,9 +446,9 @@ function ParticipantSection({
                       {getParticipantDisplayName(participant)}
                     </span>
                   </td>
-                  <td className="px-1.5 py-3 text-center md:px-4 md:py-4">
+                  <td className="px-1 py-3 text-center md:px-4 md:py-4">
                     <span
-                      className={`inline-flex rounded-full px-1.5 py-0.5 text-[10px] font-bold md:px-2.5 md:py-1 md:text-xs ${
+                      className={`inline-flex min-w-[2.9rem] items-center justify-center whitespace-nowrap break-keep rounded-full px-1.5 py-0.5 text-[10px] font-bold md:min-w-0 md:px-2.5 md:py-1 md:text-xs ${
                         isGuestParticipant(participant)
                           ? "bg-amber-50 text-amber-700"
                           : "bg-sky-50 text-sky-700"
