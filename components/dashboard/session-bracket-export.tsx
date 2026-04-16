@@ -372,56 +372,44 @@ async function svgToPngBlob(
   svgWidth: number,
   svgHeight: number
 ): Promise<Blob> {
-  const svgBlob = new Blob([svgMarkup], { type: "image/svg+xml;charset=utf-8" });
+  const blob = new Blob([svgMarkup], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
 
-  const canvas = document.createElement("canvas");
-  canvas.width = svgWidth;
-  canvas.height = svgHeight;
-
-  const context = canvas.getContext("2d");
-  if (!context) {
-    throw new Error("이미지 캔버스를 준비하지 못했습니다.");
-  }
-
-  context.fillStyle = "#ffffff";
-  context.fillRect(0, 0, svgWidth, svgHeight);
-
-  // createImageBitmap: SVG를 지정 크기로 강제 래스터라이즈
-  // img 태그 방식보다 모바일에서 훨씬 안정적으로 동작함
-  if (typeof createImageBitmap === "function") {
-    const bitmap = await createImageBitmap(svgBlob, {
-      resizeWidth: svgWidth,
-      resizeHeight: svgHeight,
-      resizeQuality: "high",
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () =>
+        reject(new Error("대진표 이미지를 렌더링하지 못했습니다."));
+      img.src = url;
     });
-    context.drawImage(bitmap, 0, 0, svgWidth, svgHeight);
-    bitmap.close();
-  } else {
-    // createImageBitmap 미지원 환경 폴백 (구형 브라우저)
-    const url = URL.createObjectURL(svgBlob);
-    try {
-      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-        const img = new Image(svgWidth, svgHeight);
-        img.onload = () => resolve(img);
-        img.onerror = () =>
-          reject(new Error("대진표 이미지를 렌더링하지 못했습니다."));
-        img.src = url;
-      });
-      context.drawImage(image, 0, 0, svgWidth, svgHeight);
-    } finally {
-      URL.revokeObjectURL(url);
-    }
-  }
 
-  return await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((result) => {
-      if (result) {
-        resolve(result);
-        return;
-      }
-      reject(new Error("PNG 파일로 변환하지 못했습니다."));
-    }, "image/png");
-  });
+    const canvas = document.createElement("canvas");
+    // .width/.height는 DOM 미삽입 시 모바일에서 0 반환 → naturalWidth 우선 사용
+    canvas.width = image.naturalWidth > 0 ? image.naturalWidth : svgWidth;
+    canvas.height = image.naturalHeight > 0 ? image.naturalHeight : svgHeight;
+
+    const context = canvas.getContext("2d");
+    if (!context) {
+      throw new Error("이미지 캔버스를 준비하지 못했습니다.");
+    }
+
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    return await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((result) => {
+        if (result) {
+          resolve(result);
+          return;
+        }
+        reject(new Error("PNG 파일로 변환하지 못했습니다."));
+      }, "image/png");
+    });
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 export async function buildBracketImageFiles(
@@ -440,14 +428,63 @@ export async function buildBracketImageFiles(
   ];
 }
 
-export async function downloadFiles(files: File[]) {
-  const isMobile =
-    typeof navigator !== "undefined" &&
-    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error("이미지를 준비하지 못했습니다."));
+    reader.readAsDataURL(blob);
+  });
+}
 
-  // 모바일: Web Share API로 네이티브 갤러리 저장
-  // canShare 체크 없이 직접 시도 — canShare가 보수적으로 false를 반환하는 기기 대응
-  // AbortError(사용자 취소)는 re-throw, 그 외 에러는 앵커 다운로드로 폴백
+function showImageOverlay(dataUrl: string) {
+  const overlay = document.createElement("div");
+  overlay.style.cssText = [
+    "position:fixed;inset:0;z-index:99999",
+    "background:rgba(0,0,0,0.92)",
+    "display:flex;flex-direction:column;align-items:center;justify-content:center",
+    "gap:20px;padding:24px;box-sizing:border-box",
+  ].join(";");
+
+  const img = document.createElement("img");
+  img.src = dataUrl;
+  img.style.cssText =
+    "max-width:100%;max-height:65vh;object-fit:contain;border-radius:8px";
+
+  const hint = document.createElement("p");
+  hint.textContent = "이미지를 길게 눌러 저장하세요";
+  hint.style.cssText =
+    "color:#fff;font-size:16px;font-weight:700;margin:0;text-align:center;font-family:sans-serif";
+
+  const closeBtn = document.createElement("button");
+  closeBtn.textContent = "닫기";
+  closeBtn.style.cssText = [
+    "padding:12px 32px;background:#fff;border:none",
+    "border-radius:999px;font-size:15px;font-weight:700;cursor:pointer",
+    "font-family:sans-serif",
+  ].join(";");
+  closeBtn.onclick = () => overlay.remove();
+
+  overlay.appendChild(img);
+  overlay.appendChild(hint);
+  overlay.appendChild(closeBtn);
+  document.body.appendChild(overlay);
+}
+
+export async function downloadFiles(files: File[]) {
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  const isKakaoTalk = /KAKAOTALK/i.test(ua);
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(ua);
+
+  // 카카오톡 인앱 브라우저: 다운로드/Web Share 모두 차단됨
+  // → 이미지를 화면에 띄우고 길게 눌러 저장하도록 안내
+  if (isKakaoTalk) {
+    const dataUrl = await blobToDataUrl(files[0]);
+    showImageOverlay(dataUrl);
+    return;
+  }
+
+  // 일반 모바일 브라우저: Web Share API로 갤러리 저장
   if (isMobile && typeof navigator?.share === "function") {
     try {
       await navigator.share({ files, title: files[0]?.name });
@@ -456,11 +493,11 @@ export async function downloadFiles(files: File[]) {
       if (err instanceof DOMException && err.name === "AbortError") {
         throw err;
       }
-      // 그 외(미지원, 파일 형식 오류 등) → 앵커 다운로드로 폴백
+      // Web Share 실패 → 앵커 다운로드로 폴백
     }
   }
 
-  // PC (기존 동작) + 모바일 Web Share 미지원 폴백: 앵커 다운로드
+  // PC + 그 외 폴백: 앵커 다운로드
   files.forEach((file) => {
     const url = URL.createObjectURL(file);
     const anchor = document.createElement("a");
