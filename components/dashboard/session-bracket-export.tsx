@@ -360,6 +360,24 @@ function renderSvg(session: ClubSession, bracket: SessionBracket) {
     currentY += sectionHeight(round) + SECTION_GAP;
   });
 
+  // 워터마크: 헤더 우측 상단 (제목/날짜가 중앙 정렬이라 우측에 여백)
+  const wmX = IMAGE_WIDTH - PADDING_X;
+  const wmY = PADDING_Y + 62;
+  markup += `
+    <text
+      x="${wmX}" y="${wmY}"
+      fill="#64748b"
+      fill-opacity="0.28"
+      font-size="64"
+      font-weight="900"
+      text-anchor="end"
+      dominant-baseline="middle"
+      transform="rotate(-12, ${wmX}, ${wmY})"
+      font-family="Pretendard, Apple SD Gothic Neo, Noto Sans KR, sans-serif"
+      pointer-events="none"
+    >콕매니저🏸</text>
+  `;
+
   return `
     <svg xmlns="http://www.w3.org/2000/svg" width="${IMAGE_WIDTH}" height="${height}" viewBox="0 0 ${IMAGE_WIDTH} ${height}">
       ${markup}
