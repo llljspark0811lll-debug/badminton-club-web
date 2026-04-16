@@ -143,7 +143,7 @@ export default function DashboardPage() {
   const [paymentLoading, setPaymentLoading] =
     useState(false);
   const [customFieldLabelDraft, setCustomFieldLabelDraft] =
-    useState("차량번호");
+    useState("소속클럽");
   const [customFieldLabelDirty, setCustomFieldLabelDirty] =
     useState(false);
   const [savingClubSettings, setSavingClubSettings] =
@@ -1916,7 +1916,7 @@ export default function DashboardPage() {
             <MembersTable
               members={activeMembers}
               customFieldLabel={
-                clubInfo?.customFieldLabel ?? "차량번호"
+                clubInfo?.customFieldLabel ?? "소속클럽"
               }
               onEdit={openEditMemberModal}
               onDelete={(id) => {
@@ -1927,7 +1927,7 @@ export default function DashboardPage() {
             />
             <ClubSettingsPanel
               customFieldLabel={
-                clubInfo?.customFieldLabel ?? "차량번호"
+                clubInfo?.customFieldLabel ?? "소속클럽"
               }
               draftLabel={customFieldLabelDraft}
               saving={savingClubSettings}
@@ -1958,7 +1958,7 @@ export default function DashboardPage() {
             <RequestsTable
             requests={requests}
             customFieldLabel={
-              clubInfo?.customFieldLabel ?? "차량번호"
+              clubInfo?.customFieldLabel ?? "소속클럽"
             }
             approvingIds={approvingRequestIds}
             bulkProcessing={processingAllRequests}
@@ -2085,7 +2085,7 @@ export default function DashboardPage() {
           <DeletedMembersTable
             members={deletedMembers}
             customFieldLabel={
-              clubInfo?.customFieldLabel ?? "차량번호"
+              clubInfo?.customFieldLabel ?? "소속클럽"
             }
             onRestore={(id) => {
               handleRestore(id).catch((error: Error) => {
@@ -2108,7 +2108,7 @@ export default function DashboardPage() {
         editingMember={editingMember}
         form={form}
         customFieldLabel={
-          clubInfo?.customFieldLabel ?? "차량번호"
+          clubInfo?.customFieldLabel ?? "소속클럽"
         }
         tutorialTargetId="member-form-modal"
         onChange={setForm}

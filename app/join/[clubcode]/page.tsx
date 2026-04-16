@@ -34,7 +34,7 @@ export default function JoinPage() {
 
   const [clubConfig, setClubConfig] = useState<JoinConfig>({
     name: "클럽",
-    customFieldLabel: "차량번호",
+    customFieldLabel: "소속클럽",
     publicJoinToken: "",
   });
   const [submitting, setSubmitting] = useState(false);
@@ -62,7 +62,7 @@ export default function JoinPage() {
           setClubConfig({
             name: data.name,
             customFieldLabel:
-              data.customFieldLabel ?? "차량번호",
+              data.customFieldLabel ?? "소속클럽",
             publicJoinToken: data.publicJoinToken ?? accessKey,
           });
         }
@@ -70,7 +70,7 @@ export default function JoinPage() {
       .catch(() => {
         setClubConfig({
           name: "클럽",
-          customFieldLabel: "차량번호",
+          customFieldLabel: "소속클럽",
           publicJoinToken: accessKey ?? "",
         });
       });

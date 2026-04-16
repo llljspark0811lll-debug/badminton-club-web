@@ -59,7 +59,7 @@ export async function GET() {
       calculatedStatus,
       subscriptionEnd: club.subscriptionEnd,
       customFieldLabel:
-        currentAdmin?.customFieldLabel ?? "차량번호",
+        currentAdmin?.customFieldLabel ?? "소속클럽",
       adminEmail: currentAdmin?.email ?? "",
       pendingRequestCount,
     });

@@ -22,7 +22,7 @@ export async function GET() {
 
   return NextResponse.json({
     customFieldLabel:
-      currentAdmin?.customFieldLabel ?? "차량번호",
+      currentAdmin?.customFieldLabel ?? "소속클럽",
     adminEmail: currentAdmin?.email ?? "",
   });
 }
