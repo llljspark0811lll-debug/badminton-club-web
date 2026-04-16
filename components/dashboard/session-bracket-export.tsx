@@ -372,33 +372,46 @@ async function svgToPngBlob(
   svgWidth: number,
   svgHeight: number
 ): Promise<Blob> {
-  // blob URL 대신 data URL 사용 — 모바일 WebView의 blob 렌더링 제한 우회
-  const dataUrl =
-    "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgMarkup);
-
-  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-    // 생성자에 명시적 크기 전달 — DOM 미삽입 시 .width/.height가 0이 되는 문제 방지
-    const nextImage = new Image(svgWidth, svgHeight);
-    nextImage.onload = () => resolve(nextImage);
-    nextImage.onerror = () =>
-      reject(new Error("대진표 이미지를 렌더링하지 못했습니다."));
-    nextImage.src = dataUrl;
-  });
+  const svgBlob = new Blob([svgMarkup], { type: "image/svg+xml;charset=utf-8" });
 
   const canvas = document.createElement("canvas");
-  // naturalWidth가 0인 경우(일부 모바일 WebView) SVG 원본 크기로 폴백
-  canvas.width = image.naturalWidth > 0 ? image.naturalWidth : svgWidth;
-  canvas.height = image.naturalHeight > 0 ? image.naturalHeight : svgHeight;
+  canvas.width = svgWidth;
+  canvas.height = svgHeight;
 
   const context = canvas.getContext("2d");
-
   if (!context) {
     throw new Error("이미지 캔버스를 준비하지 못했습니다.");
   }
 
   context.fillStyle = "#ffffff";
-  context.fillRect(0, 0, canvas.width, canvas.height);
-  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  context.fillRect(0, 0, svgWidth, svgHeight);
+
+  // createImageBitmap: SVG를 지정 크기로 강제 래스터라이즈
+  // img 태그 방식보다 모바일에서 훨씬 안정적으로 동작함
+  if (typeof createImageBitmap === "function") {
+    const bitmap = await createImageBitmap(svgBlob, {
+      resizeWidth: svgWidth,
+      resizeHeight: svgHeight,
+      resizeQuality: "high",
+    });
+    context.drawImage(bitmap, 0, 0, svgWidth, svgHeight);
+    bitmap.close();
+  } else {
+    // createImageBitmap 미지원 환경 폴백 (구형 브라우저)
+    const url = URL.createObjectURL(svgBlob);
+    try {
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image(svgWidth, svgHeight);
+        img.onload = () => resolve(img);
+        img.onerror = () =>
+          reject(new Error("대진표 이미지를 렌더링하지 못했습니다."));
+        img.src = url;
+      });
+      context.drawImage(image, 0, 0, svgWidth, svgHeight);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
 
   return await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((result) => {
@@ -406,7 +419,6 @@ async function svgToPngBlob(
         resolve(result);
         return;
       }
-
       reject(new Error("PNG 파일로 변환하지 못했습니다."));
     }, "image/png");
   });
@@ -434,17 +446,17 @@ export async function downloadFiles(files: File[]) {
     /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
   // 모바일: Web Share API로 네이티브 갤러리 저장
-  // (iOS → "사진 저장", Android → 갤러리/파일 저장)
-  // navigator.share가 AbortError를 throw하면 호출부(handleExport)에서 처리
-  if (isMobile) {
-    const canWebShare =
-      typeof navigator.share === "function" &&
-      typeof navigator.canShare === "function" &&
-      navigator.canShare({ files });
-
-    if (canWebShare) {
+  // canShare 체크 없이 직접 시도 — canShare가 보수적으로 false를 반환하는 기기 대응
+  // AbortError(사용자 취소)는 re-throw, 그 외 에러는 앵커 다운로드로 폴백
+  if (isMobile && typeof navigator?.share === "function") {
+    try {
       await navigator.share({ files, title: files[0]?.name });
       return;
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        throw err;
+      }
+      // 그 외(미지원, 파일 형식 오류 등) → 앵커 다운로드로 폴백
     }
   }
 
