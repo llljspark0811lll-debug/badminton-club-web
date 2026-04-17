@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Participant = {
   id: number;
@@ -79,8 +79,8 @@ function emptyGuest(): GuestDraft {
   return { name: "", age: "", gender: "", level: "" };
 }
 
-function storageKey(token: string) {
-  return `public-session-member:${token}`;
+function storageKey(joinToken: string) {
+  return `public-session-member:club:${joinToken}`;
 }
 
 function formatDate(value: string) {
@@ -410,7 +410,11 @@ export default function PublicSessionPage() {
   const [commentsTotalPages, setCommentsTotalPages] = useState(1);
   const [commentsTotalCount, setCommentsTotalCount] = useState(0);
 
-  const rememberStorageKey = storageKey(token);
+  // 클럽 단위 인증 키 — 세션이 로드되면 joinToken(클럽 고유값)으로 업데이트됨
+  const clubJoinTokenRef = useRef<string | null>(null);
+  function getStorageKey() {
+    return storageKey(clubJoinTokenRef.current ?? token);
+  }
 
   async function fetchSessionData() {
     if (!token) return;
@@ -422,6 +426,9 @@ export default function PublicSessionPage() {
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.error || "운동 일정 정보를 불러오지 못했습니다.");
+      }
+      if (data.joinToken) {
+        clubJoinTokenRef.current = data.joinToken;
       }
       setSession(data);
     } catch (error) {
@@ -513,7 +520,7 @@ export default function PublicSessionPage() {
         throw new Error(data.error || "회원 확인에 실패했습니다.");
       }
 
-      localStorage.setItem(rememberStorageKey, data.rememberToken);
+      localStorage.setItem(getStorageKey(), data.rememberToken);
       setIdentifiedMember((previous) => {
         if (!options?.silent || !previous) {
           return data.member;
@@ -534,7 +541,7 @@ export default function PublicSessionPage() {
           error instanceof Error ? error.message : "회원 확인에 실패했습니다."
         );
       }
-      localStorage.removeItem(rememberStorageKey);
+      localStorage.removeItem(getStorageKey());
       setIdentifiedMember(null);
     } finally {
       setIdentifyLoading(false);
@@ -543,7 +550,7 @@ export default function PublicSessionPage() {
 
   async function refreshIdentifiedMember() {
     if (!token) return;
-    const rememberToken = localStorage.getItem(rememberStorageKey);
+    const rememberToken = localStorage.getItem(getStorageKey());
     if (!rememberToken) return;
 
     await identifyMember({
@@ -553,17 +560,16 @@ export default function PublicSessionPage() {
   }
 
   useEffect(() => {
-    fetchSessionData().catch(() => undefined);
     fetchComments(1).catch(() => undefined);
 
-    const rememberToken = localStorage.getItem(rememberStorageKey);
-    if (rememberToken) {
-      identifyMember({
-        rememberToken,
-        silent: true,
-      }).catch(() => undefined);
-    }
-  }, [rememberStorageKey, token]);
+    // 세션 데이터를 먼저 로드해 clubJoinTokenRef를 설정한 뒤 자동 인증 시도
+    fetchSessionData().then(() => {
+      const rememberToken = localStorage.getItem(getStorageKey());
+      if (rememberToken) {
+        identifyMember({ rememberToken, silent: true }).catch(() => undefined);
+      }
+    }).catch(() => undefined);
+  }, [token]);
 
   useEffect(() => {
     if (!token) return;
@@ -589,7 +595,7 @@ export default function PublicSessionPage() {
       window.clearInterval(interval);
       window.removeEventListener("focus", handleFocus);
     };
-  }, [commentsPage, rememberStorageKey, token]);
+  }, [commentsPage, token]);
 
   async function handleRespond(action: "REGISTER" | "CANCEL") {
     if (!identifiedMember) return;
@@ -597,7 +603,7 @@ export default function PublicSessionPage() {
     try {
       setSubmitLoading(true);
       setSubmitSuccessMessage("");
-      const rememberToken = localStorage.getItem(rememberStorageKey);
+      const rememberToken = localStorage.getItem(getStorageKey());
 
       if (!rememberToken) {
         throw new Error("회원 자동 인식 정보가 없습니다. 다시 확인해주세요.");
@@ -706,7 +712,7 @@ export default function PublicSessionPage() {
     }
 
     const content = commentInput.trim();
-    const rememberToken = localStorage.getItem(rememberStorageKey);
+    const rememberToken = localStorage.getItem(getStorageKey());
 
     if (!rememberToken) {
       setCommentSubmitError("회원 자동 인식 정보가 없습니다. 다시 확인해주세요.");
@@ -759,7 +765,7 @@ export default function PublicSessionPage() {
       return;
     }
 
-    const rememberToken = localStorage.getItem(rememberStorageKey);
+    const rememberToken = localStorage.getItem(getStorageKey());
 
     if (!rememberToken) {
       setCommentSubmitError("회원 자동 인식 정보가 없습니다. 다시 확인해주세요.");
@@ -1101,7 +1107,7 @@ export default function PublicSessionPage() {
                       </div>
                       <button
                         onClick={() => {
-                          localStorage.removeItem(rememberStorageKey);
+                          localStorage.removeItem(getStorageKey());
                           setIdentifiedMember(null);
                           setIdentifyError("");
                           setSubmitSuccessMessage("");
