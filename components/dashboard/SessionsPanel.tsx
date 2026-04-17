@@ -731,6 +731,12 @@ export function SessionsPanel({
   const waitlistedGuestCount = waitlistedParticipants.filter(
     (participant) => isGuestParticipant(participant)
   ).length;
+  const canceledMemberCount = canceledParticipants.filter(
+    (participant) => !isGuestParticipant(participant)
+  ).length;
+  const canceledGuestCount = canceledParticipants.filter(
+    (participant) => isGuestParticipant(participant)
+  ).length;
 
   function resetForm() {
     setForm({
@@ -1193,37 +1199,49 @@ export function SessionsPanel({
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-3 gap-2 md:mt-5 md:gap-4">
-              <div className="rounded-2xl bg-slate-50 p-3 md:p-4">
-                <p className="text-[11px] font-semibold text-slate-500 md:text-sm">
+            <div className="mt-4 grid grid-cols-2 gap-2 md:mt-5 md:grid-cols-4 md:gap-4">
+              <div className="rounded-2xl border border-sky-200 bg-sky-50 p-3 md:p-4">
+                <p className="text-[11px] font-semibold text-sky-600 md:text-sm">
                   정원
                 </p>
-                <p className="mt-1.5 text-xl font-black text-slate-900 md:mt-2 md:text-2xl">
+                <p className="mt-1.5 text-xl font-black text-sky-700 md:mt-2 md:text-2xl">
                   {selectedSession.capacity ?? "제한 없음"}
                 </p>
               </div>
-              <div className="rounded-2xl bg-slate-50 p-3 md:p-4">
-                <p className="text-[11px] font-semibold text-slate-500 md:text-sm">
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 md:p-4">
+                <p className="text-[11px] font-semibold text-emerald-600 md:text-sm">
                   참석 인원
                 </p>
-                <p className="mt-1.5 text-xl font-black text-slate-900 md:mt-2 md:text-2xl">
+                <p className="mt-1.5 text-xl font-black text-emerald-700 md:mt-2 md:text-2xl">
                   {selectedSession.registeredCount ??
                     registeredParticipants.length}
                 </p>
-                <p className="mt-1.5 text-[10px] font-medium leading-4 text-slate-500 md:mt-2 md:text-xs">
+                <p className="mt-1.5 text-[10px] font-medium leading-4 text-emerald-600 md:mt-2 md:text-xs">
                   회원 {registeredMemberCount}명 / 게스트{" "}
                   {registeredGuestCount}명
                 </p>
               </div>
-              <div className="rounded-2xl bg-slate-50 p-3 md:p-4">
-                <p className="text-[11px] font-semibold text-slate-500 md:text-sm">
+              <div className="rounded-2xl border border-rose-100 bg-rose-50/60 p-3 md:p-4">
+                <p className="text-[11px] font-semibold text-rose-400 md:text-sm">
+                  불참 인원
+                </p>
+                <p className="mt-1.5 text-xl font-black text-rose-500 md:mt-2 md:text-2xl">
+                  {canceledParticipants.length}
+                </p>
+                <p className="mt-1.5 text-[10px] font-medium leading-4 text-rose-400 md:mt-2 md:text-xs">
+                  회원 {canceledMemberCount}명 / 게스트{" "}
+                  {canceledGuestCount}명
+                </p>
+              </div>
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 md:p-4">
+                <p className="text-[11px] font-semibold text-amber-600 md:text-sm">
                   대기 인원
                 </p>
-                <p className="mt-1.5 text-xl font-black text-slate-900 md:mt-2 md:text-2xl">
+                <p className="mt-1.5 text-xl font-black text-amber-700 md:mt-2 md:text-2xl">
                   {selectedSession.waitlistedCount ??
                     waitlistedParticipants.length}
                 </p>
-                <p className="mt-1.5 text-[10px] font-medium leading-4 text-slate-500 md:mt-2 md:text-xs">
+                <p className="mt-1.5 text-[10px] font-medium leading-4 text-amber-600 md:mt-2 md:text-xs">
                   회원 {waitlistedMemberCount}명 / 게스트{" "}
                   {waitlistedGuestCount}명
                 </p>

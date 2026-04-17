@@ -932,7 +932,7 @@ export default function PublicSessionPage() {
               </p>
             </div>
             <div className="w-full max-w-3xl">
-              <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
+              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-3">
                 <div className="rounded-[1rem] border border-sky-200 bg-sky-50 px-2 py-2 sm:rounded-[1.4rem] sm:px-4 sm:py-4">
                   <div className="text-[8px] font-black tracking-[0.1em] text-sky-600 sm:text-[11px] sm:tracking-[0.18em]">
                     CAPACITY
@@ -953,6 +953,19 @@ export default function PublicSessionPage() {
                   <div className="mt-1 space-y-0 text-[9px] font-semibold leading-3 text-slate-600 sm:mt-2 sm:space-y-1 sm:text-xs sm:leading-4">
                     <div>회원 {session.registeredMemberCount}명</div>
                     <div>게스트 {session.registeredGuestCount}명</div>
+                  </div>
+                </div>
+                <div className="rounded-[1rem] border border-rose-100 bg-rose-50/60 px-2 py-2 sm:rounded-[1.4rem] sm:px-4 sm:py-4">
+                  <div className="text-[8px] font-black tracking-[0.1em] text-rose-400 sm:text-[11px] sm:tracking-[0.18em]">
+                    ABSENT
+                  </div>
+                  <div className="mt-0.5 text-[10px] font-bold text-slate-500 sm:mt-1.5 sm:text-sm">불참 현황</div>
+                  <div className="mt-1 text-lg font-black text-rose-500 sm:mt-2 sm:text-[2.25rem]">
+                    {absentMembers.length + absentGuests.length}명
+                  </div>
+                  <div className="mt-1 space-y-0 text-[9px] font-semibold leading-3 text-slate-600 sm:mt-2 sm:space-y-1 sm:text-xs sm:leading-4">
+                    <div>회원 {absentMembers.length}명</div>
+                    <div>게스트 {absentGuests.length}명</div>
                   </div>
                 </div>
                 <div className="rounded-[1rem] border border-amber-200 bg-amber-50 px-2 py-2 sm:rounded-[1.4rem] sm:px-4 sm:py-4">
