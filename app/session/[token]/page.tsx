@@ -639,7 +639,7 @@ export default function PublicSessionPage() {
 
       const successMessage =
         action === "CANCEL"
-          ? "참석 취소가 완료되었습니다."
+          ? "불참 처리가 완료되었습니다."
           : data.status === "WAITLIST"
             ? "참석 신청이 완료되었습니다. 현재 대기 인원으로 등록되었습니다."
             : "참석 신청이 완료되었습니다.";
