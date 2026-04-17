@@ -296,7 +296,7 @@ export function SessionBracketPanel({
 
   return (
     <>
-      <section className="overflow-hidden rounded-[1.5rem] border border-slate-200">
+      <section className="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-200 bg-slate-50 px-3 py-3 md:px-4 md:py-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>

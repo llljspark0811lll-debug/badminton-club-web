@@ -275,9 +275,9 @@ export default function DashboardPage() {
       },
       {
         id: "attendance",
-        title: "출석은 실제 참석 상태만 체크하면 됩니다",
+        title: "참석 명단을 확인하고 자동 대진표를 생성하세요",
         description:
-          "운동 신청된 명단이 자동으로 넘어오기 때문에,\n현장에서는 출석 · 지각 · 결석만 체크하면 됩니다.",
+          "참석 확정 인원을 한눈에 확인한 뒤,\n코트 수와 최소 경기 수를 설정해 자동 대진표를 바로 생성할 수 있습니다.",
         targetId: "tab-attendance",
         tab: "attendance",
       },
@@ -1667,27 +1667,6 @@ export default function DashboardPage() {
     await refreshSessionDetail(sessionId);
   }
 
-  async function handleUpdateAttendance(
-    participantId: number,
-    attendanceStatus:
-      | "PENDING"
-      | "PRESENT"
-      | "ABSENT"
-      | "LATE"
-  ) {
-    await requestJson("/api/sessions/attendance", {
-      method: "POST",
-      body: JSON.stringify({
-        participantId,
-        attendanceStatus,
-      }),
-    });
-
-    if (selectedSessionId) {
-      await refreshSessionDetail(selectedSessionId);
-    }
-  }
-
   async function handleCancelParticipant(participantId: number) {
     await requestJson("/api/sessions/participants", {
       method: "DELETE",
@@ -2089,7 +2068,6 @@ export default function DashboardPage() {
               selectedSessionId={selectedSessionId}
               loadingSelectedSession={loadingSessionDetail}
               onSelectSession={handleSelectSession}
-              onUpdateAttendance={handleUpdateAttendance}
             />
           )
         ) : null}

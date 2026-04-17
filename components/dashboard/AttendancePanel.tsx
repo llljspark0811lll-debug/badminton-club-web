@@ -1,13 +1,16 @@
-import { useEffect } from "react";
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
 import { SessionBracketPanel } from "@/components/dashboard/SessionBracketPanel";
 import type { ClubSession } from "@/components/dashboard/types";
 import {
   formatDate,
-  formatDateTime,
-  getAttendanceStatusLabel,
+  getLevelTextClasses,
   getParticipantDisplayName,
-  getParticipantMetaText,
-  getParticipantStatusLabel,
+  getParticipantGenderLabel,
+  getParticipantLevelLabel,
+  getParticipantRemarkText,
+  getSortedLevels,
   isGuestParticipant,
 } from "@/components/dashboard/utils";
 
@@ -16,22 +19,107 @@ type AttendancePanelProps = {
   selectedSessionId: number | null;
   loadingSelectedSession: boolean;
   onSelectSession: (id: number) => void;
-  onUpdateAttendance: (
-    participantId: number,
-    attendanceStatus:
-      | "PENDING"
-      | "PRESENT"
-      | "ABSENT"
-      | "LATE"
-  ) => Promise<void>;
 };
+
+type ParticipantSortOption = "name" | "gender" | "level" | "recent";
+
+type ParticipantFilterState = {
+  searchQuery: string;
+  typeFilter: string;
+  genderFilter: string;
+  levelFilter: string;
+  sortOption: ParticipantSortOption;
+};
+
+const initialFilters: ParticipantFilterState = {
+  searchQuery: "",
+  typeFilter: "ALL",
+  genderFilter: "ALL",
+  levelFilter: "ALL",
+  sortOption: "name",
+};
+
+function getGenderBadgeClass(gender: string) {
+  if (gender === "남") return "bg-sky-50 text-sky-700";
+  if (gender === "여") return "bg-rose-50 text-rose-700";
+  return "bg-slate-100 text-slate-500";
+}
+
+function getLevelBadgeClass(level: string) {
+  return `bg-slate-100 ${getLevelTextClasses(level)}`;
+}
+
+function filterAndSortParticipants(
+  participants: ReturnType<typeof getRegisteredParticipants>,
+  filters: ParticipantFilterState
+) {
+  const query = filters.searchQuery.trim().toLowerCase();
+
+  return participants
+    .filter((participant) => {
+      const name = getParticipantDisplayName(participant);
+      const remark = getParticipantRemarkText(participant);
+      const gender = getParticipantGenderLabel(participant);
+      const level = getParticipantLevelLabel(participant);
+
+      const matchesSearch =
+        !query ||
+        name.toLowerCase().includes(query) ||
+        remark.toLowerCase().includes(query) ||
+        gender.toLowerCase().includes(query) ||
+        level.toLowerCase().includes(query);
+
+      const participantType = isGuestParticipant(participant) ? "GUEST" : "MEMBER";
+      const matchesType =
+        filters.typeFilter === "ALL" || participantType === filters.typeFilter;
+      const matchesGender =
+        filters.genderFilter === "ALL" || gender === filters.genderFilter;
+      const matchesLevel =
+        filters.levelFilter === "ALL" || level === filters.levelFilter;
+
+      return matchesSearch && matchesType && matchesGender && matchesLevel;
+    })
+    .sort((left, right) => {
+      if (filters.sortOption === "gender") {
+        const genderOrder = { 남: 0, 여: 1, "-": 2 } as const;
+        const leftRank =
+          genderOrder[getParticipantGenderLabel(left) as keyof typeof genderOrder] ?? 9;
+        const rightRank =
+          genderOrder[getParticipantGenderLabel(right) as keyof typeof genderOrder] ?? 9;
+        if (leftRank !== rightRank) return leftRank - rightRank;
+      }
+
+      if (filters.sortOption === "level") {
+        const levelOrder = ["S", "A", "B", "C", "D", "E", "초심"];
+        const leftRank = levelOrder.indexOf(getParticipantLevelLabel(left));
+        const rightRank = levelOrder.indexOf(getParticipantLevelLabel(right));
+        if (leftRank !== rightRank) {
+          return (leftRank === -1 ? 99 : leftRank) - (rightRank === -1 ? 99 : rightRank);
+        }
+      }
+
+      if (filters.sortOption === "recent") {
+        return (
+          new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
+        );
+      }
+
+      return getParticipantDisplayName(left).localeCompare(
+        getParticipantDisplayName(right),
+        "ko"
+      );
+    });
+}
+
+function getRegisteredParticipants(session: ClubSession) {
+  return (session.participants ?? []).filter((p) => p.status === "REGISTERED");
+}
 
 export function AttendancePanel({
   sessions,
   selectedSessionId,
   loadingSelectedSession,
   onSelectSession,
-  onUpdateAttendance,
 }: AttendancePanelProps) {
   const hasSelectedSession = sessions.some(
     (session) => session.id === selectedSessionId
@@ -42,28 +130,64 @@ export function AttendancePanel({
     sessions[0] ??
     null;
 
+  const [filters, setFilters] = useState<ParticipantFilterState>(initialFilters);
+
   useEffect(() => {
     if (!hasSelectedSession && sessions[0]) {
       onSelectSession(sessions[0].id);
     }
   }, [hasSelectedSession, onSelectSession, sessions]);
 
-  const participants =
-    selectedSession?.participants?.filter(
-      (participant) => participant.status !== "CANCELED"
-    ) ?? [];
+  useEffect(() => {
+    setFilters(initialFilters);
+  }, [selectedSession?.id]);
 
-  const handledCount = participants.filter(
-    (participant) => participant.attendanceStatus !== "PENDING"
+  const registeredParticipants = useMemo(
+    () => (selectedSession ? getRegisteredParticipants(selectedSession) : []),
+    [selectedSession]
+  );
+
+  const filteredParticipants = useMemo(
+    () => filterAndSortParticipants(registeredParticipants, filters),
+    [registeredParticipants, filters]
+  );
+
+  const summary = useMemo(() => {
+    const levelCounts = new Map<string, number>();
+    let maleCount = 0;
+    let femaleCount = 0;
+
+    for (const p of registeredParticipants) {
+      const gender = getParticipantGenderLabel(p);
+      const level = getParticipantLevelLabel(p);
+      if (gender === "남") maleCount += 1;
+      else if (gender === "여") femaleCount += 1;
+      if (level && level !== "-") {
+        levelCounts.set(level, (levelCounts.get(level) ?? 0) + 1);
+      }
+    }
+
+    return {
+      totalCount: registeredParticipants.length,
+      maleCount,
+      femaleCount,
+      levels: getSortedLevels([...levelCounts.keys()]).map((level) => ({
+        level,
+        count: levelCounts.get(level) ?? 0,
+      })),
+    };
+  }, [registeredParticipants]);
+
+  const sortedLevels = useMemo(
+    () => getSortedLevels(summary.levels.map((item) => item.level)),
+    [summary.levels]
+  );
+
+  const filteredMemberCount = filteredParticipants.filter(
+    (p) => !isGuestParticipant(p)
   ).length;
-  const presentCount = participants.filter(
-    (participant) => participant.attendanceStatus === "PRESENT"
-  ).length;
-  const lateCount = participants.filter(
-    (participant) => participant.attendanceStatus === "LATE"
-  ).length;
-  const pendingCount = participants.filter(
-    (participant) => participant.attendanceStatus === "PENDING"
+  const filteredGuestCount = filteredParticipants.filter(
+    (p) => isGuestParticipant(p)
   ).length;
 
   return (
@@ -72,12 +196,9 @@ export function AttendancePanel({
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div className="space-y-4">
             <div>
-              <h3 className="text-xl font-black text-slate-900">
-                출석·대진 운영
-              </h3>
+              <h3 className="text-xl font-black text-slate-900">자동 대진표</h3>
               <p className="mt-2 text-sm leading-6 text-slate-500">
-                당일 현장에서는 출석 체크를 먼저 정리하고, 마감된 명단 기준으로
-                바로 자동 대진표까지 이어서 운영하면 됩니다.
+                최종 참석 명단을 확인하고 자동 대진표를 생성합니다.
               </p>
             </div>
 
@@ -88,16 +209,13 @@ export function AttendancePanel({
                     {selectedSession.title}
                   </p>
                   <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600">
-                    {selectedSession.status === "CLOSED"
-                      ? "마감 일정"
-                      : "모집중 일정"}
+                    {selectedSession.status === "CLOSED" ? "마감 일정" : "모집중 일정"}
                   </span>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs font-medium text-slate-500 md:text-sm">
                   <span>운동날짜 · {formatDate(selectedSession.date)}</span>
                   <span>
-                    운동시간 · {selectedSession.startTime} -{" "}
-                    {selectedSession.endTime}
+                    운동시간 · {selectedSession.startTime} – {selectedSession.endTime}
                   </span>
                   {selectedSession.location ? (
                     <span>운동장소 · {selectedSession.location}</span>
@@ -114,18 +232,15 @@ export function AttendancePanel({
               </span>
               <select
                 value={selectedSession?.id ?? ""}
-                onChange={(event) =>
-                  onSelectSession(Number(event.target.value))
-                }
+                onChange={(event) => onSelectSession(Number(event.target.value))}
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-sky-400"
               >
                 <option value="" disabled>
-                  출석과 대진을 진행할 운동 일정을 선택해 주세요
+                  대진표를 생성할 운동 일정을 선택해 주세요
                 </option>
                 {sessions.map((session) => (
                   <option key={session.id} value={session.id}>
-                    {session.title} / {formatDate(session.date)} /{" "}
-                    {session.startTime}
+                    {session.title} / {formatDate(session.date)} / {session.startTime}
                   </option>
                 ))}
               </select>
@@ -134,338 +249,192 @@ export function AttendancePanel({
         </div>
       </section>
 
-      {selectedSession ? (
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-[1.5rem] border border-slate-200 bg-white px-4 py-4 shadow-sm">
-            <p className="text-xs font-semibold text-slate-500">
-              출석 대상
-            </p>
-            <p className="mt-2 text-2xl font-black text-slate-900">
-              {participants.length}
-            </p>
-            <p className="mt-1 text-xs text-slate-400">
-              오늘 체크할 전체 인원
-            </p>
-          </div>
-
-          <div className="rounded-[1.5rem] border border-slate-200 bg-white px-4 py-4 shadow-sm">
-            <p className="text-xs font-semibold text-slate-500">
-              처리 완료
-            </p>
-            <p className="mt-2 text-2xl font-black text-slate-900">
-              {handledCount}
-            </p>
-            <p className="mt-1 text-xs text-slate-400">
-              출석/지각/결석 체크 완료
-            </p>
-          </div>
-
-          <div className="rounded-[1.5rem] border border-slate-200 bg-white px-4 py-4 shadow-sm">
-            <p className="text-xs font-semibold text-slate-500">
-              출석 · 지각
-            </p>
-            <p className="mt-2 text-2xl font-black text-slate-900">
-              {presentCount} · {lateCount}
-            </p>
-            <p className="mt-1 text-xs text-slate-400">
-              실제 게임에 들어갈 현장 인원
-            </p>
-          </div>
-
-          <div className="rounded-[1.5rem] border border-slate-200 bg-white px-4 py-4 shadow-sm">
-            <p className="text-xs font-semibold text-slate-500">
-              미체크
-            </p>
-            <p className="mt-2 text-2xl font-black text-slate-900">
-              {pendingCount}
-            </p>
-            <p className="mt-1 text-xs text-slate-400">
-              아직 상태 확인이 필요한 인원
-            </p>
-          </div>
-        </section>
-      ) : null}
-
       {loadingSelectedSession ? (
         <div className="rounded-[1.5rem] border border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-400 shadow-sm">
-          출석 명단을 불러오는 중입니다.
+          참석 명단을 불러오는 중입니다.
         </div>
-      ) : (
-        <>
-          <div className="space-y-4 md:hidden">
-            {participants.map((participant) => (
-              <div
-                key={participant.id}
-                className="rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="text-base font-black text-slate-900">
-                        {getParticipantDisplayName(participant)}
-                      </p>
-                      <span
-                        className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${
-                          isGuestParticipant(participant)
-                            ? "bg-amber-50 text-amber-700"
-                            : "bg-sky-50 text-sky-700"
-                        }`}
-                      >
-                        {isGuestParticipant(participant)
-                          ? "게스트"
-                          : "회원"}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-sm text-slate-500">
-                      {getParticipantMetaText(participant)}
-                    </p>
-                    <p className="mt-1 text-sm text-slate-500">
-                      참여 상태 ·{" "}
-                      {getParticipantStatusLabel(participant.status)}
-                    </p>
-                    <p className="mt-1 text-sm text-slate-500">
-                      출석 상태 ·{" "}
-                      {getAttendanceStatusLabel(
-                        participant.attendanceStatus
-                      )}
-                    </p>
-                    <p className="mt-1 text-sm text-slate-400">
-                      체크 시간 · {formatDateTime(participant.checkedInAt)}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-4 grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() =>
-                      onUpdateAttendance(
-                        participant.id,
-                        "PRESENT"
-                      ).catch((error: Error) => {
-                        alert(error.message);
-                      })
-                    }
-                    className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100"
-                  >
-                    출석
-                  </button>
-                  <button
-                    onClick={() =>
-                      onUpdateAttendance(
-                        participant.id,
-                        "LATE"
-                      ).catch((error: Error) => {
-                        alert(error.message);
-                      })
-                    }
-                    className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700 transition hover:bg-amber-100"
-                  >
-                    지각
-                  </button>
-                  <button
-                    onClick={() =>
-                      onUpdateAttendance(
-                        participant.id,
-                        "ABSENT"
-                      ).catch((error: Error) => {
-                        alert(error.message);
-                      })
-                    }
-                    className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 transition hover:bg-rose-100"
-                  >
-                    결석
-                  </button>
-                  <button
-                    onClick={() =>
-                      onUpdateAttendance(
-                        participant.id,
-                        "PENDING"
-                      ).catch((error: Error) => {
-                        alert(error.message);
-                      })
-                    }
-                    className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-200"
-                  >
-                    초기화
-                  </button>
-                </div>
+      ) : selectedSession ? (
+        <section className="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-200 bg-slate-50 px-3 py-3 md:px-4 md:py-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h4 className="text-base font-black text-slate-900">최종 참석 명단</h4>
+                <p className="mt-1 text-sm text-slate-500">
+                  운동 일정을 마감한 최종 참석자 명단입니다.
+                </p>
               </div>
-            ))}
-
-            {participants.length === 0 ? (
-              <div className="rounded-[1.5rem] border border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-400 shadow-sm">
-                선택한 일정에 출석 대상이 없습니다.
-              </div>
-            ) : null}
-          </div>
-
-          <div className="hidden overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-sm md:block">
-            <div className="border-b border-slate-200 bg-slate-50 px-4 py-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h4 className="text-base font-black text-slate-900">
-                    현장 출석 체크
-                  </h4>
-                  <p className="mt-1 text-sm text-slate-500">
-                    오늘 도착한 인원만 빠르게 체크한 뒤, 아래에서 바로 대진표를
-                    생성하면 됩니다.
-                  </p>
-                </div>
-                <div className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-600">
-                  출석 대상 {participants.length}명
-                </div>
+              <div className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600 md:px-3 md:text-xs">
+                회원 {filteredMemberCount}명 / 게스트 {filteredGuestCount}명
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="min-w-[980px] w-full text-sm">
-                <thead className="bg-slate-50 text-left text-slate-500">
-                  <tr>
-                    <th className="px-4 py-4 font-semibold">이름</th>
-                    <th className="px-4 py-4 font-semibold">구분</th>
-                    <th className="px-4 py-4 font-semibold">
-                      연락처 / 메모
-                    </th>
-                    <th className="px-4 py-4 font-semibold">참여 상태</th>
-                    <th className="px-4 py-4 font-semibold">출석 상태</th>
-                    <th className="px-4 py-4 font-semibold">체크 시간</th>
-                    <th className="px-4 py-4 font-semibold">처리</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {participants.map((participant) => (
-                    <tr
-                      key={participant.id}
-                      className="hover:bg-slate-50"
-                    >
-                      <td className="px-4 py-4 font-bold text-slate-900">
-                        {getParticipantDisplayName(participant)}
+            <div className="mt-3 flex flex-wrap gap-2 md:mt-4">
+              <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 md:px-4 md:text-sm">
+                전체 {summary.totalCount}명
+              </span>
+              <span className="rounded-full bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-700 md:px-4 md:text-sm">
+                남자 {summary.maleCount}명
+              </span>
+              <span className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 md:px-4 md:text-sm">
+                여자 {summary.femaleCount}명
+              </span>
+              {summary.levels.map((item) => (
+                <span
+                  key={item.level}
+                  className={`rounded-full px-3 py-1.5 text-xs font-bold md:px-4 md:text-sm ${getLevelBadgeClass(item.level)}`}
+                >
+                  {item.level} {item.count}명
+                </span>
+              ))}
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-5 md:gap-3">
+              <input
+                value={filters.searchQuery}
+                onChange={(event) =>
+                  setFilters((current) => ({
+                    ...current,
+                    searchQuery: event.target.value,
+                  }))
+                }
+                placeholder="이름, 비고 검색"
+                className="col-span-2 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none transition focus:border-sky-400 md:col-span-1 md:px-4 md:py-3 md:text-sm"
+              />
+
+              <select
+                value={filters.typeFilter}
+                onChange={(event) =>
+                  setFilters((current) => ({ ...current, typeFilter: event.target.value }))
+                }
+                className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none transition focus:border-sky-400 md:px-4 md:py-3 md:text-sm"
+              >
+                <option value="ALL">전체 구분</option>
+                <option value="MEMBER">회원만</option>
+                <option value="GUEST">게스트만</option>
+              </select>
+
+              <select
+                value={filters.genderFilter}
+                onChange={(event) =>
+                  setFilters((current) => ({ ...current, genderFilter: event.target.value }))
+                }
+                className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none transition focus:border-sky-400 md:px-4 md:py-3 md:text-sm"
+              >
+                <option value="ALL">전체 성별</option>
+                <option value="남">남자만</option>
+                <option value="여">여자만</option>
+              </select>
+
+              <select
+                value={filters.levelFilter}
+                onChange={(event) =>
+                  setFilters((current) => ({ ...current, levelFilter: event.target.value }))
+                }
+                className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none transition focus:border-sky-400 md:px-4 md:py-3 md:text-sm"
+              >
+                <option value="ALL">전체 급수</option>
+                {sortedLevels.map((level) => (
+                  <option key={level} value={level}>
+                    {level}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={filters.sortOption}
+                onChange={(event) =>
+                  setFilters((current) => ({
+                    ...current,
+                    sortOption: event.target.value as ParticipantSortOption,
+                  }))
+                }
+                className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none transition focus:border-sky-400 md:px-4 md:py-3 md:text-sm"
+              >
+                <option value="name">이름순</option>
+                <option value="gender">성별순</option>
+                <option value="level">급수순</option>
+                <option value="recent">최근 신청순</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="overflow-hidden">
+            <table className="w-full table-fixed text-[10px] sm:text-[11px] md:text-sm">
+              <thead className="bg-white text-left text-slate-500">
+                <tr>
+                  <th className="w-[22%] px-2 py-3 font-semibold md:px-4 md:py-4">이름</th>
+                  <th className="w-[15%] px-1 py-3 text-center font-semibold md:px-4 md:py-4">구분</th>
+                  <th className="w-[11%] px-1.5 py-3 text-center font-semibold md:px-4 md:py-4">성별</th>
+                  <th className="w-[11%] px-1.5 py-3 text-center font-semibold md:px-4 md:py-4">급수</th>
+                  <th className="px-2 py-3 font-semibold md:px-4 md:py-4">비고</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredParticipants.map((participant) => {
+                  const gender = getParticipantGenderLabel(participant);
+                  const level = getParticipantLevelLabel(participant);
+                  return (
+                    <tr key={participant.id} className="hover:bg-slate-50">
+                      <td className="px-2 py-3 font-bold leading-4 text-slate-900 md:px-4 md:py-4 md:leading-5">
+                        <span className="break-keep">
+                          {getParticipantDisplayName(participant)}
+                        </span>
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="px-1 py-3 text-center md:px-4 md:py-4">
                         <span
-                          className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                          className={`inline-flex min-w-[2.9rem] items-center justify-center whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] font-bold md:min-w-0 md:px-2.5 md:py-1 md:text-xs ${
                             isGuestParticipant(participant)
                               ? "bg-amber-50 text-amber-700"
                               : "bg-sky-50 text-sky-700"
                           }`}
                         >
-                          {isGuestParticipant(participant)
-                            ? "게스트"
-                            : "회원"}
+                          {isGuestParticipant(participant) ? "게스트" : "회원"}
                         </span>
                       </td>
-                      <td className="px-4 py-4 text-slate-500">
-                        {getParticipantMetaText(participant)}
+                      <td className="px-1.5 py-3 text-center md:px-4 md:py-4">
+                        <span
+                          className={`inline-flex rounded-full px-1.5 py-0.5 text-[10px] font-bold md:px-2.5 md:py-1 md:text-xs ${getGenderBadgeClass(gender)}`}
+                        >
+                          {gender}
+                        </span>
                       </td>
-                      <td className="px-4 py-4 text-slate-500">
-                        {getParticipantStatusLabel(participant.status)}
+                      <td className="px-1.5 py-3 text-center md:px-4 md:py-4">
+                        <span
+                          className={`inline-flex rounded-full px-1.5 py-0.5 text-[10px] font-bold md:px-2.5 md:py-1 md:text-xs ${getLevelBadgeClass(level)}`}
+                        >
+                          {level}
+                        </span>
                       </td>
-                      <td className="px-4 py-4 font-semibold text-slate-700">
-                        {getAttendanceStatusLabel(
-                          participant.attendanceStatus
-                        )}
-                      </td>
-                      <td className="px-4 py-4 text-slate-400">
-                        {formatDateTime(participant.checkedInAt)}
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            onClick={() =>
-                              onUpdateAttendance(
-                                participant.id,
-                                "PRESENT"
-                              ).catch((error: Error) => {
-                                alert(error.message);
-                              })
-                            }
-                            className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100"
-                          >
-                            출석
-                          </button>
-                          <button
-                            onClick={() =>
-                              onUpdateAttendance(
-                                participant.id,
-                                "LATE"
-                              ).catch((error: Error) => {
-                                alert(error.message);
-                              })
-                            }
-                            className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700 transition hover:bg-amber-100"
-                          >
-                            지각
-                          </button>
-                          <button
-                            onClick={() =>
-                              onUpdateAttendance(
-                                participant.id,
-                                "ABSENT"
-                              ).catch((error: Error) => {
-                                alert(error.message);
-                              })
-                            }
-                            className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 transition hover:bg-rose-100"
-                          >
-                            결석
-                          </button>
-                          <button
-                            onClick={() =>
-                              onUpdateAttendance(
-                                participant.id,
-                                "PENDING"
-                              ).catch((error: Error) => {
-                                alert(error.message);
-                              })
-                            }
-                            className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-200"
-                          >
-                            초기화
-                          </button>
-                        </div>
+                      <td className="px-2 py-3 text-[10px] leading-4 text-slate-500 md:px-4 md:py-4 md:text-sm md:leading-5">
+                        <span className="block whitespace-pre-line break-keep">
+                          {getParticipantRemarkText(participant)}
+                        </span>
                       </td>
                     </tr>
-                  ))}
+                  );
+                })}
 
-                  {participants.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={7}
-                        className="px-4 py-12 text-center text-sm text-slate-400"
-                      >
-                        선택한 일정에 출석 대상이 없습니다.
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
+                {filteredParticipants.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="px-3 py-10 text-center text-xs text-slate-400 md:px-4 md:py-12 md:text-sm"
+                    >
+                      {registeredParticipants.length === 0
+                        ? "최종 참석 확정 인원이 없습니다."
+                        : "조건에 맞는 참석자가 없습니다."}
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
           </div>
+        </section>
+      ) : null}
 
-          {selectedSession ? (
-            <div className="space-y-3">
-              <div className="rounded-[1.5rem] border border-slate-200 bg-white px-4 py-4 shadow-sm">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h4 className="text-base font-black text-slate-900">
-                      자동 대진표 생성
-                    </h4>
-                    <p className="mt-1 text-sm text-slate-500">
-                      출석 체크가 끝난 뒤, 이 일정의 마감 명단 기준으로 바로
-                      대진표를 생성해 현장 운영에 사용할 수 있어요.
-                    </p>
-                  </div>
-                  <div className="rounded-full bg-slate-50 px-3 py-1 text-xs font-bold text-slate-600">
-                    출석 {presentCount}명 · 지각 {lateCount}명
-                  </div>
-                </div>
-              </div>
-
-              <SessionBracketPanel session={selectedSession} />
-            </div>
-          ) : null}
-        </>
-      )}
+      {selectedSession ? (
+        <SessionBracketPanel session={selectedSession} />
+      ) : null}
     </div>
   );
 }
