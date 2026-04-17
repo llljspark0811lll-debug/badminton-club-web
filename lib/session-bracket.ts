@@ -22,6 +22,7 @@ export type SessionBracketGenerationInput = {
   courtCount: number;
   minGamesPerPlayer: number;
   separateByGender: boolean;
+  fixedPairs?: Array<[string, string]>;
   seed?: number;
 };
 
@@ -370,19 +371,42 @@ function chooseSelectedPlayersForPool(
   states: Map<string, PlayerState>,
   previousRested: Set<string>,
   minGamesPerPlayer: number,
-  randomOrder: Map<string, number>
+  randomOrder: Map<string, number>,
+  fixedPairMap: Map<string, string>
 ) {
   if (matchCount <= 0) {
     return [];
   }
 
-  return sortPlayersForSelection(
+  const target = matchCount * 4;
+  const poolIds = new Set(pool.players.map((p) => p.playerId));
+  const sorted = sortPlayersForSelection(
     pool.players,
     states,
     previousRested,
     minGamesPerPlayer,
     randomOrder
-  ).slice(0, matchCount * 4);
+  );
+
+  // 페어는 원자 단위로 취급: 둘 다 선택하거나 둘 다 제외
+  const selected = new Set<string>();
+  for (const player of sorted) {
+    if (selected.size >= target) break;
+    if (selected.has(player.playerId)) continue;
+
+    const partnerId = fixedPairMap.get(player.playerId);
+    if (partnerId && poolIds.has(partnerId) && !selected.has(partnerId)) {
+      if (selected.size + 2 <= target) {
+        selected.add(player.playerId);
+        selected.add(partnerId);
+      }
+      // 슬롯이 1개만 남으면 페어 스킵 (다음 개인 선수가 채움)
+    } else {
+      selected.add(player.playerId);
+    }
+  }
+
+  return pool.players.filter((p) => selected.has(p.playerId));
 }
 
 function generateCombinations<T>(
@@ -427,6 +451,25 @@ function getPairingRandomBias(
   );
 }
 
+function isPairingValidForFixedPairs(
+  teamAPlayers: InternalPlayer[],
+  teamBPlayers: InternalPlayer[],
+  fixedPairMap: Map<string, string>
+) {
+  for (const player of [...teamAPlayers, ...teamBPlayers]) {
+    const partnerId = fixedPairMap.get(player.playerId);
+    if (!partnerId) continue;
+    const playerInA = teamAPlayers.some((p) => p.playerId === player.playerId);
+    const partnerInA = teamAPlayers.some((p) => p.playerId === partnerId);
+    const partnerInB = teamBPlayers.some((p) => p.playerId === partnerId);
+    // 파트너가 이 쿼텟 안에 있는데 다른 팀에 배정된 경우 → 무효
+    if ((partnerInA || partnerInB) && playerInA !== partnerInA) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function evaluateQuartetPairings(
   quartet: InternalPlayer[],
   division: DivisionKey,
@@ -434,8 +477,9 @@ function evaluateQuartetPairings(
   courtNumber: number,
   partnerHistory: Map<string, number>,
   opponentHistory: Map<string, number>,
-  randomOrder: Map<string, number>
-): MatchCandidate {
+  randomOrder: Map<string, number>,
+  fixedPairMap: Map<string, string>
+): MatchCandidate | null {
   const [p1, p2, p3, p4] = quartet;
   const pairings: [InternalPlayer[], InternalPlayer[]][] = [
     [
@@ -455,6 +499,10 @@ function evaluateQuartetPairings(
   let bestCandidate: MatchCandidate | null = null;
 
   for (const [teamAPlayers, teamBPlayers] of pairings) {
+    // 고정 파트너가 다른 팀으로 분리되는 배정은 건너뜀
+    if (!isPairingValidForFixedPairs(teamAPlayers!, teamBPlayers!, fixedPairMap)) {
+      continue;
+    }
     const teamATotal = teamAPlayers.reduce(
       (total, player) => total + player.score,
       0
@@ -537,7 +585,7 @@ function evaluateQuartetPairings(
     }
   }
 
-  return bestCandidate!;
+  return bestCandidate;
 }
 
 function buildRoundMatchesForPool(
@@ -547,28 +595,36 @@ function buildRoundMatchesForPool(
   partnerHistory: Map<string, number>,
   opponentHistory: Map<string, number>,
   randomOrder: Map<string, number>,
-  random: RandomFn
+  random: RandomFn,
+  fixedPairMap: Map<string, string>
 ) {
   const orderedPlayers = shuffleArray(selectedPlayers, random);
-
   const matches: SessionBracketMatch[] = [];
   let nextCourtNumber = firstCourtNumber;
 
   while (orderedPlayers.length >= 4) {
     const anchorIndex = Math.floor(random() * orderedPlayers.length);
     const anchor = orderedPlayers[anchorIndex]!;
-    const combos = shuffleArray(
-      generateCombinations(
-        orderedPlayers.filter((_, index) => index !== anchorIndex),
-        3
-      ),
-      random
-    );
+    const remaining = orderedPlayers.filter((_, index) => index !== anchorIndex);
+    const combos = shuffleArray(generateCombinations(remaining, 3), random);
 
     let bestCandidate: MatchCandidate | null = null;
 
     for (const combo of combos) {
       const quartet = [anchor, ...combo];
+      const quartetIds = new Set(quartet.map((p) => p.playerId));
+
+      // 고정 파트너가 이 쿼텟에는 없는데 아직 남은 선수 중에 있다면 → 분리 → 건너뜀
+      const splitsPair = quartet.some((player) => {
+        const partnerId = fixedPairMap.get(player.playerId);
+        return (
+          partnerId !== undefined &&
+          orderedPlayers.some((p) => p.playerId === partnerId) &&
+          !quartetIds.has(partnerId)
+        );
+      });
+      if (splitsPair) continue;
+
       const candidate = evaluateQuartetPairings(
         quartet,
         pool.key,
@@ -576,17 +632,18 @@ function buildRoundMatchesForPool(
         nextCourtNumber,
         partnerHistory,
         opponentHistory,
-        randomOrder
+        randomOrder,
+        fixedPairMap
       );
 
-      if (!bestCandidate || candidate.score < bestCandidate.score) {
+      if (candidate && (!bestCandidate || candidate.score < bestCandidate.score)) {
         bestCandidate = candidate;
       }
     }
 
     if (!bestCandidate) {
       throw new Error(
-        `${pool.label} 대진표를 구성하지 못했습니다. 참가자 수와 조건을 다시 확인해 주세요.`
+        `${pool.label} 대진표를 구성하지 못했습니다. 고정 파트너 설정 또는 참가자 수와 조건을 다시 확인해 주세요.`
       );
     }
 
@@ -749,6 +806,7 @@ export function generateSessionBracket(
       Math.floor(input.minGamesPerPlayer)
     ),
     separateByGender: Boolean(input.separateByGender),
+    fixedPairs: input.fixedPairs ?? [],
   };
 
   const players = shuffleArray(
@@ -756,6 +814,16 @@ export function generateSessionBracket(
     random
   );
   validateGenerationInput(players, config);
+
+  // 고정 파트너 맵 구성 (양방향)
+  const playerIdSet = new Set(players.map((p) => p.playerId));
+  const fixedPairMap = new Map<string, string>();
+  for (const [idA, idB] of config.fixedPairs ?? []) {
+    if (playerIdSet.has(idA) && playerIdSet.has(idB) && idA !== idB) {
+      fixedPairMap.set(idA, idB);
+      fixedPairMap.set(idB, idA);
+    }
+  }
 
   const randomOrder = new Map(
     players.map((player) => [player.playerId, random()])
@@ -816,7 +884,8 @@ export function generateSessionBracket(
         states,
         previousRested,
         config.minGamesPerPlayer,
-        randomOrder
+        randomOrder,
+        fixedPairMap
       );
       const selectedIdSet = new Set(
         selectedPlayers.map((player) => player.playerId)
@@ -836,7 +905,8 @@ export function generateSessionBracket(
         partnerHistory,
         opponentHistory,
         randomOrder,
-        random
+        random,
+        fixedPairMap
       );
 
       roundMatches.push(...poolMatches);

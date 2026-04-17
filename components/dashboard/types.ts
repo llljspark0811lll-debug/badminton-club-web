@@ -109,6 +109,7 @@ export interface SessionBracketConfig {
   courtCount: number;
   minGamesPerPlayer: number;
   separateByGender: boolean;
+  fixedPairs?: Array<[string, string]>;
 }
 
 export interface SessionBracketPlayerEntry {

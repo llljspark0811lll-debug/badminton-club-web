@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type {
   ClubSession,
   SessionBracket,
+  SessionParticipant,
 } from "@/components/dashboard/types";
 import { normalizeGenderLabel } from "@/components/dashboard/utils";
 import {
@@ -66,6 +67,8 @@ export function SessionBracketPanel({
   const [exportingMode, setExportingMode] = useState<
     "download" | null
   >(null);
+  const [fixedPairs, setFixedPairs] = useState<Array<[string, string]>>([]);
+  const [pendingPairPlayerId, setPendingPairPlayerId] = useState<string | null>(null);
 
   const registeredCount =
     session.registeredCount ??
@@ -79,6 +82,8 @@ export function SessionBracketPanel({
     setCourtCount(buildDefaultCourtCount(session));
     setMinGamesPerPlayer(2);
     setSeparateByGender(false);
+    setFixedPairs([]);
+    setPendingPairPlayerId(null);
     setError("");
     setBracket(null);
     setLoaded(false);
@@ -129,6 +134,7 @@ export function SessionBracketPanel({
           setSeparateByGender(
             data.bracket.config.separateByGender
           );
+          setFixedPairs(data.bracket.config.fixedPairs ?? []);
         }
       } catch (loadError) {
         if (!cancelled) {
@@ -158,6 +164,53 @@ export function SessionBracketPanel({
     [bracket]
   );
 
+  const registeredParticipants = useMemo(
+    () => (session.participants ?? []).filter((p) => p.status === "REGISTERED"),
+    [session.participants]
+  );
+
+  const pairedPlayerIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const [a, b] of fixedPairs) {
+      ids.add(a);
+      ids.add(b);
+    }
+    return ids;
+  }, [fixedPairs]);
+
+  function getParticipantPlayerId(participant: SessionParticipant) {
+    return participant.memberId !== null
+      ? `member-${participant.memberId}`
+      : `guest-${participant.id}`;
+  }
+
+  function getParticipantName(participant: SessionParticipant) {
+    return participant.member?.name ?? participant.guestName ?? "?";
+  }
+
+  function handleParticipantCardClick(playerId: string) {
+    if (pendingPairPlayerId === null) {
+      setPendingPairPlayerId(playerId);
+      return;
+    }
+    if (pendingPairPlayerId === playerId) {
+      setPendingPairPlayerId(null);
+      return;
+    }
+    const first = pendingPairPlayerId;
+    setFixedPairs((prev) => {
+      const filtered = prev.filter(
+        ([a, b]) => a !== first && b !== first && a !== playerId && b !== playerId
+      );
+      return [...filtered, [first, playerId]];
+    });
+    setPendingPairPlayerId(null);
+  }
+
+  function removePair(pairIndex: number) {
+    setFixedPairs((prev) => prev.filter((_, i) => i !== pairIndex));
+  }
+
   async function handleGenerateBracket() {
     setLoading(true);
     setError("");
@@ -176,6 +229,7 @@ export function SessionBracketPanel({
           courtCount,
           minGamesPerPlayer,
           separateByGender,
+          fixedPairs,
         }),
       });
 
@@ -338,6 +392,92 @@ export function SessionBracketPanel({
           같은 파트너와 같은 상대 반복은 최대한 줄이고, 직전 라운드를
           쉬었던 인원은 다음 라운드에 우선 배정합니다.
         </div>
+
+        {canGenerate && registeredParticipants.length >= 2 ? (
+          <div className="space-y-3 rounded-2xl border border-slate-200 p-4">
+            <div>
+              <p className="text-xs font-bold text-slate-700">고정 파트너 설정</p>
+              <p className="mt-1 text-xs text-slate-400">
+                {pendingPairPlayerId
+                  ? "파트너로 묶을 두 번째 참가자를 클릭하세요."
+                  : "매 라운드 같은 팀으로 묶을 첫 번째 참가자를 클릭하세요."}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {registeredParticipants.map((participant) => {
+                const pid = getParticipantPlayerId(participant);
+                const name = getParticipantName(participant);
+                const isPending = pendingPairPlayerId === pid;
+                const isPaired = pairedPlayerIds.has(pid);
+                return (
+                  <button
+                    key={pid}
+                    type="button"
+                    onClick={() => handleParticipantCardClick(pid)}
+                    disabled={loading}
+                    className={[
+                      "rounded-full border px-3 py-1.5 text-xs font-bold transition disabled:cursor-not-allowed",
+                      isPending
+                        ? "border-sky-400 bg-sky-100 text-sky-700"
+                        : isPaired
+                          ? "border-violet-200 bg-violet-50 text-violet-700"
+                          : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50",
+                    ].join(" ")}
+                  >
+                    {name}
+                  </button>
+                );
+              })}
+            </div>
+            {fixedPairs.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+                  고정된 파트너
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {fixedPairs.map(([aId, bId], index) => {
+                    const aParticipant = registeredParticipants.find(
+                      (p) => getParticipantPlayerId(p) === aId
+                    );
+                    const bParticipant = registeredParticipants.find(
+                      (p) => getParticipantPlayerId(p) === bId
+                    );
+                    const aName = aParticipant
+                      ? getParticipantName(aParticipant)
+                      : aId;
+                    const bName = bParticipant
+                      ? getParticipantName(bParticipant)
+                      : bId;
+                    return (
+                      <div
+                        key={index}
+                        className="flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 pl-3 pr-1.5 py-1.5"
+                      >
+                        <span className="text-xs font-bold text-violet-700">
+                          {aName}
+                        </span>
+                        <span className="text-[10px] font-bold text-violet-400">
+                          &amp;
+                        </span>
+                        <span className="text-xs font-bold text-violet-700">
+                          {bName}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removePair(index)}
+                          disabled={loading}
+                          className="ml-1 flex h-4 w-4 items-center justify-center rounded-full bg-violet-200 text-[10px] font-black text-violet-600 transition hover:bg-violet-300 disabled:cursor-not-allowed"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="flex flex-wrap gap-2">
           <button

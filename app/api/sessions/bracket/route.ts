@@ -229,6 +229,15 @@ export async function POST(req: Request) {
     const courtCount = Number(body.courtCount);
     const minGamesPerPlayer = Number(body.minGamesPerPlayer);
     const separateByGender = Boolean(body.separateByGender);
+    const fixedPairs: Array<[string, string]> = Array.isArray(body.fixedPairs)
+      ? body.fixedPairs.filter(
+          (pair: unknown): pair is [string, string] =>
+            Array.isArray(pair) &&
+            pair.length === 2 &&
+            typeof pair[0] === "string" &&
+            typeof pair[1] === "string"
+        )
+      : [];
 
     if (
       !Number.isFinite(sessionId) ||
@@ -264,6 +273,7 @@ export async function POST(req: Request) {
       courtCount,
       minGamesPerPlayer,
       separateByGender,
+      fixedPairs,
       seed: Date.now() + Math.floor(Math.random() * 1_000_000),
     });
 

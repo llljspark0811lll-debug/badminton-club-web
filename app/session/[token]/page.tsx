@@ -1018,7 +1018,7 @@ export default function PublicSessionPage() {
               {registrationMode === "guest" ? (
                 <div className="mt-6 space-y-4">
                   <p className="text-sm leading-6 text-slate-500">
-                    클럽 회원이 아니어도 게스트로 참석 신청할 수 있습니다. 신청 취소는 관리자를 통해 처리됩니다.
+                    회원이 아니어도 게스트로 참석 신청할 수 있습니다. 신청 취소는 관리자를 통해 처리됩니다.
                   </p>
                   <input
                     value={guestName}
