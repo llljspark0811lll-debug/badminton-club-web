@@ -113,6 +113,14 @@ export function StatsOverview({
 
     return [
       {
+        label: "신규 회원",
+        value: periodStats.newMembersCount,
+        hint: "선택한 기간에 가입된 신규 회원 수",
+        accentClass:
+          "border-violet-200 bg-violet-50/80",
+        valueClass: "text-violet-700",
+      },
+      {
         label: "운동 일정",
         value: periodStats.sessionCount,
         hint: "선택한 기간에 마감된 운동 일정 수",
@@ -135,14 +143,6 @@ export function StatsOverview({
         accentClass:
           "border-amber-200 bg-amber-50/80",
         valueClass: "text-amber-700",
-      },
-      {
-        label: "신규 회원",
-        value: periodStats.newMembersCount,
-        hint: "선택한 기간에 가입된 신규 회원 수",
-        accentClass:
-          "border-violet-200 bg-violet-50/80",
-        valueClass: "text-violet-700",
       },
       {
         label: "미납 회원",
