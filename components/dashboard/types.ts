@@ -187,10 +187,8 @@ export interface DashboardStatsPeriod {
   startDate: string | Date;
   endDate: string | Date;
   sessionCount: number;
-  registeredCount: number;
+  memberAttendanceCount: number;
   guestCount: number;
-  waitlistCount: number;
-  attendanceHandledCount: number;
   newMembersCount: number;
   unpaidMembersCount: number;
 }
@@ -199,8 +197,6 @@ export interface DashboardTopMemberStat {
   memberId: number;
   name: string;
   attendanceCount: number;
-  lateCount: number;
-  guestHostedCount: number;
 }
 
 export interface DashboardStats {

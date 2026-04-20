@@ -67,6 +67,7 @@ async function getPeriodStats(
 ) {
   const sessionWhere = {
     clubId,
+    status: "CLOSED",
     date: {
       gte: start,
       lt: end,
@@ -79,10 +80,8 @@ async function getPeriodStats(
 
   const [
     sessionCount,
-    registeredCount,
+    memberAttendanceCount,
     guestCount,
-    waitlistCount,
-    attendanceHandledCount,
     newMembersCount,
   ] = await Promise.all([
     prisma.clubSession.count({
@@ -92,6 +91,7 @@ async function getPeriodStats(
       where: {
         ...participantWhere,
         status: "REGISTERED",
+        guestName: null,
       },
     }),
     prisma.sessionParticipant.count({
@@ -100,21 +100,6 @@ async function getPeriodStats(
         status: "REGISTERED",
         guestName: {
           not: null,
-        },
-      },
-    }),
-    prisma.sessionParticipant.count({
-      where: {
-        ...participantWhere,
-        status: "WAITLIST",
-      },
-    }),
-    prisma.sessionParticipant.count({
-      where: {
-        ...participantWhere,
-        status: "REGISTERED",
-        attendanceStatus: {
-          in: ["PRESENT", "LATE", "ABSENT"],
         },
       },
     }),
@@ -134,10 +119,8 @@ async function getPeriodStats(
     startDate: start,
     endDate: addDays(end, -1),
     sessionCount,
-    registeredCount,
+    memberAttendanceCount,
     guestCount,
-    waitlistCount,
-    attendanceHandledCount,
     newMembersCount,
   };
 }
@@ -181,89 +164,30 @@ async function getTopMembersForPeriod(
   start: Date,
   end: Date
 ) {
-  const [attendanceGroups, lateGroups, guestHostGroups] =
-    await Promise.all([
-      prisma.sessionParticipant.groupBy({
-        by: ["memberId"],
-        where: {
-          memberId: {
-            not: null,
-          },
-          status: "REGISTERED",
-          session: {
-            clubId,
-            date: {
-              gte: start,
-              lt: end,
-            },
-          },
+  const attendanceGroups = await prisma.sessionParticipant.groupBy({
+    by: ["memberId"],
+    where: {
+      memberId: {
+        not: null,
+      },
+      status: "REGISTERED",
+      guestName: null,
+      session: {
+        clubId,
+        status: "CLOSED",
+        date: {
+          gte: start,
+          lt: end,
         },
-        _count: {
-          _all: true,
-        },
-      }),
-      prisma.sessionParticipant.groupBy({
-        by: ["memberId"],
-        where: {
-          memberId: {
-            not: null,
-          },
-          status: "REGISTERED",
-          attendanceStatus: "LATE",
-          session: {
-            clubId,
-            date: {
-              gte: start,
-              lt: end,
-            },
-          },
-        },
-        _count: {
-          _all: true,
-        },
-      }),
-      prisma.sessionParticipant.groupBy({
-        by: ["hostMemberId"],
-        where: {
-          hostMemberId: {
-            not: null,
-          },
-          guestName: {
-            not: null,
-          },
-          status: "REGISTERED",
-          session: {
-            clubId,
-            date: {
-              gte: start,
-              lt: end,
-            },
-          },
-        },
-        _count: {
-          _all: true,
-        },
-      }),
-    ]);
-
-  const lateCountMap = new Map<number, number>(
-    lateGroups
-      .filter((group) => group.memberId !== null)
-      .map((group) => [group.memberId as number, group._count._all])
-  );
-  const guestHostCountMap = new Map<number, number>(
-    guestHostGroups
-      .filter((group) => group.hostMemberId !== null)
-      .map((group) => [
-        group.hostMemberId as number,
-        group._count._all,
-      ])
-  );
+      },
+    },
+    _count: {
+      _all: true,
+    },
+  });
 
   const topMemberIds = attendanceGroups
     .filter((group) => group.memberId !== null)
-    .sort((left, right) => right._count._all - left._count._all)
-    .slice(0, 5)
     .map((group) => group.memberId as number);
 
   const topMemberRows =
@@ -309,8 +233,6 @@ async function getTopMembersForPeriod(
         memberId,
         name: topMemberRowMap.get(memberId) ?? "회원",
         attendanceCount: group._count._all,
-        lateCount: lateCountMap.get(memberId) ?? 0,
-        guestHostedCount: guestHostCountMap.get(memberId) ?? 0,
       };
     });
 }

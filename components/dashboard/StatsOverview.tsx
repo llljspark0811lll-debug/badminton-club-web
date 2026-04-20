@@ -17,6 +17,8 @@ type StatCard = {
   label: string;
   value: number;
   hint: string;
+  accentClass: string;
+  valueClass: string;
 };
 
 function formatPeriodLabel(
@@ -109,54 +111,49 @@ export function StatsOverview({
       return [];
     }
 
-    if (period === "WEEK") {
-      return [
-        {
-          label: "운동 일정",
-          value: periodStats.sessionCount,
-          hint: "선택한 기간의 운동 일정 수",
-        },
-        {
-          label: "참석 신청",
-          value: periodStats.registeredCount,
-          hint: "선택한 기간의 참석 확정 수",
-        },
-        {
-          label: "게스트",
-          value: periodStats.guestCount,
-          hint: "선택한 기간의 동반 게스트 수",
-        },
-        {
-          label: "대기 인원",
-          value: periodStats.waitlistCount,
-          hint: "선택한 기간의 대기 인원 수",
-        },
-      ];
-    }
-
     return [
       {
         label: "운동 일정",
         value: periodStats.sessionCount,
-        hint: "선택한 기간의 운동 일정 수",
+        hint: "선택한 기간에 마감된 운동 일정 수",
+        accentClass:
+          "border-sky-200 bg-sky-50/80",
+        valueClass: "text-sky-700",
       },
       {
-        label: "참석 신청",
-        value: periodStats.registeredCount,
-        hint: "선택한 기간의 참석 신청 수",
+        label: "참석 회원",
+        value: periodStats.memberAttendanceCount,
+        hint: "마감 처리된 일정의 참석 회원 수",
+        accentClass:
+          "border-emerald-200 bg-emerald-50/80",
+        valueClass: "text-emerald-700",
+      },
+      {
+        label: "게스트",
+        value: periodStats.guestCount,
+        hint: "선택한 기간에 함께 참석한 게스트 수",
+        accentClass:
+          "border-amber-200 bg-amber-50/80",
+        valueClass: "text-amber-700",
       },
       {
         label: "신규 회원",
         value: periodStats.newMembersCount,
         hint: "선택한 기간에 가입된 신규 회원 수",
+        accentClass:
+          "border-violet-200 bg-violet-50/80",
+        valueClass: "text-violet-700",
       },
       {
         label: "미납 회원",
         value: periodStats.unpaidMembersCount,
         hint: "기준 월 기준 월회비 미납 회원 수",
+        accentClass:
+          "border-rose-200 bg-rose-50/80",
+        valueClass: "text-rose-700",
       },
     ];
-  }, [period, periodStats]);
+  }, [periodStats]);
 
   async function handleLoadCustomStats() {
     if (!customStartDate || !customEndDate) {
@@ -165,7 +162,7 @@ export function StatsOverview({
     }
 
     if (customStartDate > customEndDate) {
-      setCustomError("시작일은 종료일보다 늦을 수 없습니다.");
+      setCustomError("시작일이 종료일보다 늦을 수 없습니다.");
       return;
     }
 
@@ -209,9 +206,8 @@ export function StatsOverview({
             주간/월간 운영 통계
           </h2>
           <p className="mt-2 text-sm leading-6 text-slate-500">
-            카카오톡으로는 남기기 어려운 운영 흐름을 통계로
-            정리해서, 관리자가 특정 기간의 상태를 한 번에
-            파악할 수 있게 돕습니다.
+            마감된 운동 일정 기준으로 회원 참여 흐름과 신규 회원,
+            회비 상태까지 한 번에 확인할 수 있게 정리했습니다.
           </p>
         </div>
 
@@ -291,101 +287,89 @@ export function StatsOverview({
             )}
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-5">
             {statCards.map((card) => (
               <article
                 key={card.label}
-                className="rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-4"
+                className={`overflow-hidden rounded-[1.5rem] border px-4 py-4 shadow-sm transition ${card.accentClass}`}
               >
-                <p className="text-sm font-semibold text-slate-500">
-                  {card.label}
-                </p>
-                <p className="mt-2 text-3xl font-black text-slate-900">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-sm font-semibold text-slate-600">
+                    {card.label}
+                  </p>
+                  <span className="rounded-full bg-white/80 px-2.5 py-1 text-[10px] font-bold text-slate-500">
+                    SUMMARY
+                  </span>
+                </div>
+                <p
+                  className={`mt-4 text-3xl font-black ${card.valueClass}`}
+                >
                   {card.value}
                 </p>
-                <p className="mt-2 text-xs leading-5 text-slate-400">
+                <p className="mt-2 text-xs leading-5 text-slate-500">
                   {card.hint}
                 </p>
               </article>
             ))}
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.7fr)]">
-            <article className="rounded-[1.5rem] border border-slate-200 bg-white p-4">
-              <div className="flex items-center justify-between gap-3">
+          <article className="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-200 bg-slate-50 px-4 py-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h3 className="text-lg font-black text-slate-900">
-                    운영 체크 포인트
+                    활동 상위 회원
                   </h3>
                   <p className="mt-1 text-sm text-slate-500">
-                    총무가 바로 확인해야 할 핵심 수치입니다.
+                    마감된 일정 기준으로 가장 자주 참석한 회원을
+                    빠르게 확인합니다.
                   </p>
                 </div>
+                <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-600 shadow-sm">
+                  TOP {Math.max(periodTopMembers.length, 1)}
+                </span>
               </div>
+            </div>
 
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
-                <div className="rounded-2xl bg-sky-50 px-4 py-4">
-                  <p className="text-sm font-semibold text-sky-700">
-                    실제 출석 처리
-                  </p>
-                  <p className="mt-2 text-2xl font-black text-slate-900">
-                    {periodStats.attendanceHandledCount}
-                  </p>
-                  <p className="mt-2 text-xs leading-5 text-slate-500">
-                    선택한 기간에 출석 처리가 완료된 기록 수
-                  </p>
-                </div>
-                <div className="rounded-2xl bg-amber-50 px-4 py-4">
-                  <p className="text-sm font-semibold text-amber-700">
-                    운영 혼잡도
-                  </p>
-                  <p className="mt-2 text-2xl font-black text-slate-900">
-                    {periodStats.waitlistCount}
-                  </p>
-                  <p className="mt-2 text-xs leading-5 text-slate-500">
-                    선택한 기간에 발생한 대기 인원 수
-                  </p>
-                </div>
-              </div>
-            </article>
-
-            <article className="rounded-[1.5rem] border border-slate-200 bg-white p-4">
-              <h3 className="text-lg font-black text-slate-900">
-                활동 상위 회원
-              </h3>
-              <p className="mt-1 text-sm text-slate-500">
-                선택한 기간에 참석 신청이 많은 회원을 빠르게 확인합니다.
-              </p>
-
-              <div className="mt-4 space-y-3">
-                {periodTopMembers.map((member, index) => (
-                  <div
-                    key={member.memberId}
-                    className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3"
-                  >
-                    <div>
-                      <p className="text-sm font-bold text-slate-900">
-                        {index + 1}. {member.name}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        지각 {member.lateCount}회 · 게스트 동반{" "}
-                        {member.guestHostedCount}회
-                      </p>
+            <div className="p-4">
+              {periodTopMembers.length > 0 ? (
+                <div className="grid gap-3 xl:grid-cols-2">
+                  {periodTopMembers.map((member, index) => (
+                    <div
+                      key={member.memberId}
+                      className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-900 text-xs font-black text-white">
+                            {index + 1}
+                          </span>
+                          <p className="truncate text-base font-black text-slate-900">
+                            {member.name}
+                          </p>
+                        </div>
+                        <p className="mt-2 text-xs text-slate-500">
+                          선택한 기간 참석 누적 기록
+                        </p>
+                      </div>
+                      <div className="rounded-2xl bg-white px-4 py-2 text-right shadow-sm">
+                        <p className="text-[11px] font-semibold text-slate-400">
+                          참석 횟수
+                        </p>
+                        <p className="text-2xl font-black text-slate-900">
+                          {member.attendanceCount}
+                        </p>
+                      </div>
                     </div>
-                    <div className="rounded-full bg-white px-3 py-1 text-sm font-black text-slate-700 shadow-sm">
-                      {member.attendanceCount}회
-                    </div>
-                  </div>
-                ))}
-
-                {periodTopMembers.length === 0 ? (
-                  <div className="rounded-2xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-400">
-                    선택한 기간 집계에 참석 기록이 아직 없습니다.
-                  </div>
-                ) : null}
-              </div>
-            </article>
-          </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl bg-slate-50 px-4 py-10 text-center text-sm text-slate-400">
+                  선택한 기간 집계된 활동 회원이 아직 없습니다.
+                </div>
+              )}
+            </div>
+          </article>
         </div>
       ) : (
         <div className="mt-5 rounded-[1.5rem] bg-slate-50 px-4 py-12 text-center text-sm text-slate-400">
