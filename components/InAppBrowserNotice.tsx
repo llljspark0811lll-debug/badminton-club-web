@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
+
+const PUBLIC_PATHS = ["/session/", "/join/"];
 
 const DISMISS_KEY = "kokmanager_inapp_notice_dismissed_v2";
 const DISMISS_DURATION_MS = 24 * 60 * 60 * 1000;
@@ -72,8 +75,11 @@ function getInAppBrowserState() {
 }
 
 export default function InAppBrowserNotice() {
+  const pathname = usePathname();
   const [visible, setVisible] = useState(false);
   const browserState = useMemo(getInAppBrowserState, []);
+
+  const isPublicPage = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 
   useEffect(() => {
     if (!browserState.isInAppBrowser) {
@@ -89,7 +95,7 @@ export default function InAppBrowserNotice() {
     };
   }, [browserState.isInAppBrowser]);
 
-  if (!browserState.isInAppBrowser || !visible) {
+  if (!browserState.isInAppBrowser || !visible || isPublicPage) {
     return null;
   }
 

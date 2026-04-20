@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
+
+const PUBLIC_PATHS = ["/session/", "/join/"];
 
 type DeferredBeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -93,12 +96,15 @@ function getPwaEnvironment() {
 }
 
 export default function PwaInstallPrompt() {
+  const pathname = usePathname();
   const [deferredPrompt, setDeferredPrompt] =
     useState<DeferredBeforeInstallPromptEvent | null>(null);
   const [installVisible, setInstallVisible] = useState(false);
   const [iosVisible, setIosVisible] = useState(false);
   const [installing, setInstalling] = useState(false);
   const env = useMemo(getPwaEnvironment, []);
+
+  const isPublicPage = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 
   useEffect(() => {
     if (!env.isMobile || env.isStandalone) {
@@ -163,7 +169,7 @@ export default function PwaInstallPrompt() {
     }
   }
 
-  if (!env.isMobile || env.isStandalone) {
+  if (!env.isMobile || env.isStandalone || isPublicPage) {
     return null;
   }
 
@@ -200,11 +206,18 @@ export default function PwaInstallPrompt() {
                   >
                     {installing ? "설치 준비 중.." : "앱 설치"}
                   </button>
-                ) : (
-                  <span className="rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white">
-                    {env.isIOS ? "Safari에서 열기" : "Chrome에서 열기"}
-                  </span>
-                )}
+                ) : env.isInAppBrowser && !env.isIOS ? (
+                  <a
+                    href={
+                      typeof window !== "undefined"
+                        ? `intent://${window.location.href.replace(/^https?:\/\//, "")}#Intent;scheme=https;package=com.android.chrome;end`
+                        : "#"
+                    }
+                    className="rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-slate-800"
+                  >
+                    Chrome에서 열기
+                  </a>
+                ) : null}
 
                 <button
                   type="button"
