@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import InAppBrowserNotice from "@/components/InAppBrowserNotice";
+import PwaInstallPrompt from "@/components/PwaInstallPrompt";
+import PwaRegistrar from "@/components/PwaRegistrar";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -14,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 const siteTitle = "콕매니저🏸";
-const siteDescription = "전국 배드민턴 클럽 운영 관리 프로그램";
+const siteDescription = "배드민턴 클럽 운영 관리 프로그램";
 
 function getMetadataBase() {
   const configuredUrl =
@@ -36,6 +38,15 @@ export const metadata: Metadata = {
   title: siteTitle,
   description: siteDescription,
   applicationName: siteTitle,
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: siteTitle,
+  },
+  formatDetection: {
+    telephone: false,
+  },
   openGraph: {
     type: "website",
     locale: "ko_KR",
@@ -48,8 +59,17 @@ export const metadata: Metadata = {
     description: siteDescription,
   },
   icons: {
-    icon: "/icon.png",
-    apple: "/apple-icon.png",
+    icon: [
+      { url: "/icon.png", sizes: "512x512", type: "image/png" },
+      { url: "/pwa-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: [
+      {
+        url: "/apple-icon.png",
+        sizes: "180x180",
+        type: "image/png",
+      },
+    ],
   },
 };
 
@@ -57,6 +77,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  themeColor: "#111827",
 };
 
 export default function RootLayout({
@@ -70,6 +91,8 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <InAppBrowserNotice />
+        <PwaInstallPrompt />
+        <PwaRegistrar />
         {children}
       </body>
     </html>

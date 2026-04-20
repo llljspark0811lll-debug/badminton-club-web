@@ -2,29 +2,38 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-const DISMISS_KEY = "kokmanager_inapp_notice_dismissed";
+const DISMISS_KEY = "kokmanager_inapp_notice_dismissed_v2";
 
-function detectInAppBrowser() {
+function getInAppBrowserState() {
   if (typeof navigator === "undefined") {
-    return false;
+    return {
+      isInAppBrowser: false,
+      targetBrowser: "Chrome",
+      menuHint: "우측 상단 메뉴",
+    };
   }
 
   const userAgent = navigator.userAgent || "";
+  const isIOS = /iPhone|iPad|iPod/i.test(userAgent);
   const isMobile = /Android|iPhone|iPad|iPod/i.test(userAgent);
   const isInAppBrowser =
     /KAKAOTALK|Instagram|FBAN|FBAV|FB_IAB|Line|NAVER|DaumApps|WebView|; wv\)/i.test(
-      userAgent,
+      userAgent
     );
 
-  return isMobile && isInAppBrowser;
+  return {
+    isInAppBrowser: isMobile && isInAppBrowser,
+    targetBrowser: isIOS ? "Safari" : "Chrome",
+    menuHint: isIOS ? "하단 공유 버튼" : "우측 상단 메뉴",
+  };
 }
 
 export default function InAppBrowserNotice() {
   const [visible, setVisible] = useState(false);
-  const isInAppBrowser = useMemo(detectInAppBrowser, []);
+  const browserState = useMemo(getInAppBrowserState, []);
 
   useEffect(() => {
-    if (!isInAppBrowser) {
+    if (!browserState.isInAppBrowser) {
       document.documentElement.removeAttribute("data-in-app-browser");
       return;
     }
@@ -41,21 +50,31 @@ export default function InAppBrowserNotice() {
     return () => {
       document.documentElement.removeAttribute("data-in-app-browser");
     };
-  }, [isInAppBrowser]);
+  }, [browserState.isInAppBrowser]);
 
-  if (!isInAppBrowser || !visible) {
+  if (!browserState.isInAppBrowser || !visible) {
     return null;
   }
 
   return (
-    <div className="sticky top-0 z-[100] border-b border-sky-100 bg-white/95 px-4 py-2 backdrop-blur sm:px-6">
+    <div className="sticky top-0 z-[100] border-b border-sky-100 bg-white/95 px-4 py-3 backdrop-blur sm:px-6">
       <div className="mx-auto flex max-w-6xl items-start justify-between gap-3">
-        <p className="text-[11px] leading-5 text-slate-500 sm:text-xs">
-          화면이 다르게 보이면 우측 상단 메뉴에서
-          <br />
-          <span className="font-semibold text-slate-700"> Chrome에서 열기</span>
-          를 눌러주세요.
-        </p>
+        <div className="min-w-0">
+          <p className="text-xs font-black text-slate-900 sm:text-sm">
+            콕매니저🏸를 앱처럼 쓰려면 {browserState.targetBrowser}에서
+            열어주세요
+          </p>
+          <p className="mt-1 text-[11px] leading-5 text-slate-500 sm:text-xs">
+            현재 인앱브라우저에서는 설치 메뉴가 잘 보이지 않을 수 있어요.
+            <br />
+            {browserState.menuHint}에서{" "}
+            <span className="font-semibold text-slate-700">
+              {browserState.targetBrowser}에서 열기
+            </span>{" "}
+            후 홈 화면에 추가하면 더 앱처럼 사용할 수 있습니다.
+          </p>
+        </div>
+
         <button
           type="button"
           onClick={() => {
