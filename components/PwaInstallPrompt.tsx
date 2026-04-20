@@ -12,6 +12,49 @@ type DeferredBeforeInstallPromptEvent = Event & {
 
 const INSTALL_DISMISS_KEY = "kokmanager_pwa_install_dismissed";
 const IOS_DISMISS_KEY = "kokmanager_pwa_ios_dismissed";
+const DISMISS_DURATION_MS = 24 * 60 * 60 * 1000;
+
+function wasDismissedRecently(key: string) {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  try {
+    const stored = window.localStorage.getItem(key);
+
+    if (!stored) {
+      return false;
+    }
+
+    const dismissedAt = Number(stored);
+
+    if (!Number.isFinite(dismissedAt)) {
+      window.localStorage.removeItem(key);
+      return false;
+    }
+
+    if (Date.now() - dismissedAt < DISMISS_DURATION_MS) {
+      return true;
+    }
+
+    window.localStorage.removeItem(key);
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function dismissForOneDay(key: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(key, String(Date.now()));
+  } catch {
+    // Ignore storage failures.
+  }
+}
 
 function getPwaEnvironment() {
   if (typeof navigator === "undefined" || typeof window === "undefined") {
@@ -58,54 +101,34 @@ export default function PwaInstallPrompt() {
   const env = useMemo(getPwaEnvironment, []);
 
   useEffect(() => {
-    if (!env.isMobile || env.isStandalone || env.isInAppBrowser) {
+    if (!env.isMobile || env.isStandalone) {
       return;
     }
 
-    try {
-      const installDismissed =
-        window.localStorage.getItem(INSTALL_DISMISS_KEY) === "true";
-      const iosDismissed =
-        window.localStorage.getItem(IOS_DISMISS_KEY) === "true";
+    const installDismissed = wasDismissedRecently(INSTALL_DISMISS_KEY);
+    const iosDismissed = wasDismissedRecently(IOS_DISMISS_KEY);
 
-      if (env.isIOS && env.isSafari && !iosDismissed) {
-        setIosVisible(true);
-      }
+    if (env.isIOS && env.isSafari && !iosDismissed) {
+      setIosVisible(true);
+    }
 
-      if (installDismissed) {
-        setInstallVisible(false);
-      }
-    } catch {
-      if (env.isIOS && env.isSafari) {
-        setIosVisible(true);
-      }
+    if (env.isInAppBrowser && !installDismissed) {
+      setInstallVisible(true);
     }
   }, [env]);
 
   useEffect(() => {
-    if (!env.isMobile || env.isStandalone || env.isInAppBrowser) {
+    if (!env.isMobile || env.isStandalone) {
       return;
     }
 
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
-      setDeferredPrompt(
-        event as DeferredBeforeInstallPromptEvent
-      );
-
-      try {
-        const dismissed =
-          window.localStorage.getItem(INSTALL_DISMISS_KEY) === "true";
-        setInstallVisible(!dismissed);
-      } catch {
-        setInstallVisible(true);
-      }
+      setDeferredPrompt(event as DeferredBeforeInstallPromptEvent);
+      setInstallVisible(!wasDismissedRecently(INSTALL_DISMISS_KEY));
     };
 
-    window.addEventListener(
-      "beforeinstallprompt",
-      handleBeforeInstallPrompt
-    );
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
 
     return () => {
       window.removeEventListener(
@@ -131,7 +154,7 @@ export default function PwaInstallPrompt() {
         try {
           window.localStorage.removeItem(INSTALL_DISMISS_KEY);
         } catch {
-          // ignore
+          // Ignore storage failures.
         }
       }
     } finally {
@@ -144,9 +167,11 @@ export default function PwaInstallPrompt() {
     return null;
   }
 
+  const showInstallBanner = installVisible && (deferredPrompt || env.isInAppBrowser);
+
   return (
     <>
-      {installVisible && deferredPrompt ? (
+      {showInstallBanner ? (
         <div className="sticky top-[57px] z-[95] px-4 pt-3 sm:top-[61px] sm:px-6">
           <div className="mx-auto max-w-6xl rounded-[1.4rem] border border-slate-200 bg-white/95 p-4 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -155,30 +180,36 @@ export default function PwaInstallPrompt() {
                   콕매니저🏸를 홈 화면 앱으로 설치해보세요
                 </p>
                 <p className="mt-1 text-xs leading-5 text-slate-500 sm:text-sm">
-                  링크를 다시 찾지 않고, 앱처럼 바로 실행할 수 있습니다.
+                  {env.isInAppBrowser
+                    ? env.isIOS
+                      ? "카카오톡 브라우저에서는 바로 설치가 어려워요. 하단 공유 버튼에서 Safari로 연 뒤 홈 화면에 추가해주시면 됩니다."
+                      : "카카오톡 브라우저에서는 바로 설치가 어려워요. 우측 상단 메뉴에서 Chrome으로 연 뒤 홈 화면에 추가해주시면 됩니다."
+                    : "링크를 다시 찾지 않고, 앱처럼 바로 실행할 수 있습니다."}
                 </p>
               </div>
 
               <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={handleInstall}
-                  disabled={installing}
-                  className="rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {installing ? "설치 준비 중..." : "앱 설치"}
-                </button>
+                {!env.isInAppBrowser ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleInstall();
+                    }}
+                    disabled={installing}
+                    className="rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {installing ? "설치 준비 중.." : "앱 설치"}
+                  </button>
+                ) : (
+                  <span className="rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white">
+                    {env.isIOS ? "Safari에서 열기" : "Chrome에서 열기"}
+                  </span>
+                )}
+
                 <button
                   type="button"
                   onClick={() => {
-                    try {
-                      window.localStorage.setItem(
-                        INSTALL_DISMISS_KEY,
-                        "true"
-                      );
-                    } catch {
-                      // ignore
-                    }
+                    dismissForOneDay(INSTALL_DISMISS_KEY);
                     setInstallVisible(false);
                   }}
                   className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
@@ -200,30 +231,23 @@ export default function PwaInstallPrompt() {
                   아이폰에서는 Safari에서 홈 화면에 추가해주세요
                 </p>
                 <p className="mt-1 text-xs leading-5 text-slate-600 sm:text-sm">
-                  하단 공유 버튼 →{" "}
+                  하단 공유 버튼에서{" "}
                   <span className="font-bold text-slate-900">
                     홈 화면에 추가
                   </span>
-                  를 누르면 콕매니저🏸를 앱처럼 바로 열 수 있습니다.
+                  를 누르면 콕매니저🏸를 앱처럼 바로 실행할 수 있습니다.
                 </p>
               </div>
 
               <button
                 type="button"
                 onClick={() => {
-                  try {
-                    window.localStorage.setItem(
-                      IOS_DISMISS_KEY,
-                      "true"
-                    );
-                  } catch {
-                    // ignore
-                  }
+                  dismissForOneDay(IOS_DISMISS_KEY);
                   setIosVisible(false);
                 }}
                 className="shrink-0 rounded-2xl border border-amber-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-amber-100"
               >
-                확인
+                나중에
               </button>
             </div>
           </div>

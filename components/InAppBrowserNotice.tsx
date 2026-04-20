@@ -3,6 +3,49 @@
 import { useEffect, useMemo, useState } from "react";
 
 const DISMISS_KEY = "kokmanager_inapp_notice_dismissed_v2";
+const DISMISS_DURATION_MS = 24 * 60 * 60 * 1000;
+
+function wasDismissedRecently() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  try {
+    const stored = window.localStorage.getItem(DISMISS_KEY);
+
+    if (!stored) {
+      return false;
+    }
+
+    const dismissedAt = Number(stored);
+
+    if (!Number.isFinite(dismissedAt)) {
+      window.localStorage.removeItem(DISMISS_KEY);
+      return false;
+    }
+
+    if (Date.now() - dismissedAt < DISMISS_DURATION_MS) {
+      return true;
+    }
+
+    window.localStorage.removeItem(DISMISS_KEY);
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function dismissForOneDay() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(DISMISS_KEY, String(Date.now()));
+  } catch {
+    // Ignore storage failures.
+  }
+}
 
 function getInAppBrowserState() {
   if (typeof navigator === "undefined") {
@@ -39,13 +82,7 @@ export default function InAppBrowserNotice() {
     }
 
     document.documentElement.setAttribute("data-in-app-browser", "true");
-
-    try {
-      const dismissed = window.localStorage.getItem(DISMISS_KEY) === "true";
-      setVisible(!dismissed);
-    } catch {
-      setVisible(true);
-    }
+    setVisible(!wasDismissedRecently());
 
     return () => {
       document.documentElement.removeAttribute("data-in-app-browser");
@@ -61,28 +98,23 @@ export default function InAppBrowserNotice() {
       <div className="mx-auto flex max-w-6xl items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs font-black text-slate-900 sm:text-sm">
-            콕매니저🏸를 앱처럼 쓰려면 {browserState.targetBrowser}에서
-            열어주세요
+            콕매니저🏸를 앱처럼 쓰려면 {browserState.targetBrowser}에서 이어주세요
           </p>
           <p className="mt-1 text-[11px] leading-5 text-slate-500 sm:text-xs">
-            현재 인앱브라우저에서는 설치 메뉴가 잘 보이지 않을 수 있어요.
+            현재 인앱브라우저에서는 설치 메뉴가 잘 안 보일 수 있어요.
             <br />
             {browserState.menuHint}에서{" "}
             <span className="font-semibold text-slate-700">
               {browserState.targetBrowser}에서 열기
             </span>{" "}
-            후 홈 화면에 추가하면 더 앱처럼 사용할 수 있습니다.
+            후 홈 화면에 추가하시면 더 편하게 사용할 수 있습니다.
           </p>
         </div>
 
         <button
           type="button"
           onClick={() => {
-            try {
-              window.localStorage.setItem(DISMISS_KEY, "true");
-            } catch {
-              // Ignore storage failures and just hide the banner.
-            }
+            dismissForOneDay();
             setVisible(false);
           }}
           className="shrink-0 rounded-full border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-500 transition hover:border-slate-300 hover:text-slate-700"
