@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import InAppBrowserNotice from "@/components/InAppBrowserNotice";
 import PwaInstallPrompt from "@/components/PwaInstallPrompt";
 import PwaRegistrar from "@/components/PwaRegistrar";
 import "./globals.css";
@@ -90,7 +89,6 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <InAppBrowserNotice />
         <PwaInstallPrompt />
         <PwaRegistrar />
         {children}
