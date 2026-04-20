@@ -124,14 +124,16 @@ export default function PwaInstallPrompt() {
   }, [env]);
 
   useEffect(() => {
-    if (!env.isMobile || env.isStandalone) {
+    if (env.isStandalone) {
       return;
     }
 
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
-      setDeferredPrompt(event as DeferredBeforeInstallPromptEvent);
-      setInstallVisible(!wasDismissedRecently(INSTALL_DISMISS_KEY));
+      if (env.isMobile) {
+        setDeferredPrompt(event as DeferredBeforeInstallPromptEvent);
+        setInstallVisible(!wasDismissedRecently(INSTALL_DISMISS_KEY));
+      }
     };
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
