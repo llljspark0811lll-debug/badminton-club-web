@@ -233,8 +233,8 @@ export default function DashboardPage() {
     (activeTab === "sessions" || activeTab === "attendance") &&
     loadingSessions &&
     sessions.length === 0;
-  const tutorialSteps = useMemo<DashboardTutorialStep[]>(
-    () => [
+  const tutorialSteps = useMemo<DashboardTutorialStep[]>(() => {
+    const steps: DashboardTutorialStep[] = [
       {
         id: "welcome",
         title: "콕매니저 사용 가이드",
@@ -295,9 +295,18 @@ export default function DashboardPage() {
         description:
           "회원 등록부터 시작하거나,\n가입 신청 링크와 운동 일정 링크를 먼저 공유해도 좋습니다.",
       },
-    ],
-    []
-  );
+    ];
+
+    const sessionIndex = steps.findIndex((step) => step.id === "sessions");
+    const feeIndex = steps.findIndex((step) => step.id === "fees");
+
+    if (sessionIndex !== -1 && feeIndex !== -1 && sessionIndex < feeIndex) {
+      const [feeStep] = steps.splice(feeIndex, 1);
+      steps.splice(sessionIndex, 0, feeStep);
+    }
+
+    return steps;
+  }, []);
 
   async function refreshClubInfo() {
     const nextClubInfo = await requestJson<ClubInfo>("/api/club-info");
