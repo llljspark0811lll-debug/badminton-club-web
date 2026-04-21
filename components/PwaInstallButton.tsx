@@ -48,6 +48,18 @@ function openInChrome() {
   window.location.href = `intent://${urlWithoutScheme}#Intent;scheme=https;package=com.android.chrome;end`;
 }
 
+function showAndroidGuide() {
+  alert(
+    "콕매니저🏸를 홈 화면 앱으로 설치해보세요\n\n카카오톡 브라우저에서는 바로 설치가 어려워요. 우측 상단 메뉴에서 Chrome으로 연 뒤 '홈 화면에 추가'를 누르면\n\n콕매니저🏸를 앱처럼 바로 실행할 수 있습니다."
+  );
+}
+
+function showIosGuide() {
+  alert(
+    "하단 공유 버튼에서 Safari로 연 뒤 \n다시 한 번 하단 공유 버튼에서 '홈 화면에 추가'를 누르면\n\n콕매니저🏸를 앱처럼 바로 실행할 수 있습니다."
+  );
+}
+
 export default function PwaInstallButton() {
   const [deferredPrompt, setDeferredPrompt] =
     useState<DeferredBeforeInstallPromptEvent | null>(null);
@@ -90,23 +102,17 @@ export default function PwaInstallButton() {
 
     if (env.isInAppBrowser && env.isAndroid) {
       openInChrome();
-      window.setTimeout(() => {
-        alert(
-          "카카오톡/인스타 브라우저에서는 바로 설치가 안 될 수 있어요.\n우측 상단 메뉴에서 Chrome에서 열기를 누른 뒤 홈 화면에 추가해주세요."
-        );
-      }, 700);
+      window.setTimeout(showAndroidGuide, 700);
       return;
     }
 
     if (env.isIOS) {
-      alert(
-        "아이폰은 Safari에서 하단 공유 버튼을 누른 뒤\n'홈 화면에 추가'를 선택하면 앱처럼 사용할 수 있어요."
-      );
+      showIosGuide();
       return;
     }
 
     alert(
-      "Chrome 우측 상단 메뉴에서 '앱 설치' 또는 '홈 화면에 추가'를 선택해주세요."
+      "콕매니저🏸를 홈 화면 앱으로 설치해보세요\n\n링크를 다시 찾지 않고, 앱처럼 바로 실행할 수 있습니다.\n\nChrome 우측 상단 메뉴에서 '홈 화면에 추가' 또는 '앱 설치'를 선택해주세요."
     );
   }
 
