@@ -25,7 +25,7 @@ export function DashboardHeader({
     <div className="flex flex-col gap-4 border-b border-slate-200 pb-6 md:flex-row md:items-end md:justify-between">
       <div>
         <p className="text-sm font-semibold uppercase tracking-[0.24em] text-sky-600">
-          배드민턴 클럽 운영
+          배드민턴 클럽/소모임 운영
         </p>
 
         <div className="mt-2 flex flex-wrap items-start gap-3">
