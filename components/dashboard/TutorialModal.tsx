@@ -60,13 +60,9 @@ function useSpotlight(open: boolean, targetId?: string) {
       const el = document.querySelector(`[data-tutorial-id="${targetId}"]`) as HTMLElement | null;
       if (el) {
         const isMobile = window.innerWidth < 768;
-        el.scrollIntoView({ behavior: "smooth", block: isMobile ? "center" : "nearest", inline: "center" });
-        // 모바일에서 카드(하단 고정)가 요소를 가리지 않도록 추가 여백
-        if (isMobile) {
-          window.setTimeout(() => {
-            window.scrollBy({ top: 120, behavior: "smooth" });
-          }, 400);
-        }
+        // 모바일: start → 요소를 화면 상단으로 (카드 가림 방지, 패널은 상단부터 표시)
+        // 데스크탑: nearest → 이미 보이면 그대로
+        el.scrollIntoView({ behavior: "smooth", block: isMobile ? "start" : "nearest", inline: "nearest" });
         setRect(el.getBoundingClientRect());
         return;
       }
