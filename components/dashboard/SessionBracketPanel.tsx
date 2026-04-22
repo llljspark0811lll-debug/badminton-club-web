@@ -70,6 +70,14 @@ export function SessionBracketPanel({
   const [fixedPairs, setFixedPairs] = useState<Array<[string, string]>>([]);
   const [pendingPairPlayerId, setPendingPairPlayerId] = useState<string | null>(null);
 
+  type SwapSelection = {
+    roundIndex: number;
+    matchIndex: number;
+    team: "A" | "B";
+    playerIndex: number;
+  };
+  const [swapSelection, setSwapSelection] = useState<SwapSelection | null>(null);
+
   const registeredCount =
     session.registeredCount ??
     (session.participants ?? []).filter(
@@ -84,6 +92,7 @@ export function SessionBracketPanel({
     setSeparateByGender(false);
     setFixedPairs([]);
     setPendingPairPlayerId(null);
+    setSwapSelection(null);
     setError("");
     setBracket(null);
     setLoaded(false);
@@ -244,6 +253,7 @@ export function SessionBracketPanel({
       }
 
       setBracket(data.bracket);
+      setSwapSelection(null);
     } catch (generateError) {
       setError(
         generateError instanceof Error
@@ -254,6 +264,48 @@ export function SessionBracketPanel({
       setLoading(false);
       setLoaded(true);
     }
+  }
+
+  function handlePlayerClick(
+    roundIndex: number,
+    matchIndex: number,
+    team: "A" | "B",
+    playerIndex: number
+  ) {
+    if (!bracket) return;
+
+    // 같은 선수 → 선택 해제
+    if (
+      swapSelection?.roundIndex === roundIndex &&
+      swapSelection?.matchIndex === matchIndex &&
+      swapSelection?.team === team &&
+      swapSelection?.playerIndex === playerIndex
+    ) {
+      setSwapSelection(null);
+      return;
+    }
+
+    // 다른 경기 선수 클릭 → 선택 대상 변경
+    if (
+      !swapSelection ||
+      swapSelection.roundIndex !== roundIndex ||
+      swapSelection.matchIndex !== matchIndex
+    ) {
+      setSwapSelection({ roundIndex, matchIndex, team, playerIndex });
+      return;
+    }
+
+    // 같은 경기 다른 선수 → 스왑
+    const newBracket = JSON.parse(JSON.stringify(bracket)) as SessionBracket;
+    const match = newBracket.rounds[roundIndex].matches[matchIndex];
+    const fromTeam = swapSelection.team === "A" ? match.teamA : match.teamB;
+    const toTeam = team === "A" ? match.teamA : match.teamB;
+    const fromPlayer = fromTeam.players[swapSelection.playerIndex];
+    const toPlayer = toTeam.players[playerIndex];
+    fromTeam.players[swapSelection.playerIndex] = toPlayer;
+    toTeam.players[playerIndex] = fromPlayer;
+    setBracket(newBracket);
+    setSwapSelection(null);
   }
 
   async function handleExport() {
@@ -573,7 +625,22 @@ export function SessionBracketPanel({
             ) : null}
 
             <div className="space-y-4">
-              {bracket.rounds.map((round) => (
+              {swapSelection && (
+                <div className="flex items-center gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-2.5">
+                  <span className="text-xs font-bold text-sky-700">
+                    ✦ 바꿀 선수를 같은 경기에서 선택하세요
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSwapSelection(null)}
+                    className="ml-auto rounded-full bg-sky-100 px-2.5 py-1 text-xs font-bold text-sky-600 transition hover:bg-sky-200"
+                  >
+                    취소
+                  </button>
+                </div>
+              )}
+
+            {bracket.rounds.map((round, roundIndex) => (
                 <section
                   key={round.roundNumber}
                   className="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white"
@@ -590,7 +657,7 @@ export function SessionBracketPanel({
                   </div>
 
                   <div className="space-y-3 p-4">
-                    {round.matches.map((match) => (
+                    {round.matches.map((match, matchIndex) => (
                       <div
                         key={`${round.roundNumber}-${match.courtNumber}`}
                         className="rounded-2xl border border-slate-200 bg-white px-4 py-3"
@@ -606,51 +673,67 @@ export function SessionBracketPanel({
                           </div>
                         </div>
 
-                        <div className="mt-3 grid grid-cols-[minmax(0,1fr)_2.5rem_minmax(0,1fr)] items-center gap-2 md:gap-3">
-                          <div className="min-w-0 rounded-xl bg-sky-50 px-2.5 py-2.5 md:rounded-2xl md:px-3 md:py-3">
-                            <p className="text-xs font-bold text-sky-700">
-                              팀 A
-                            </p>
-                            <div className="mt-2 space-y-1.5">
-                              {match.teamA.players.map((player) => (
-                                <p
-                                  key={player.playerId}
-                                  className="truncate text-[15px] font-semibold leading-6 text-slate-900 md:text-sm"
-                                >
-                                  {player.name}
-                                  <span className="ml-2 text-xs font-medium text-slate-500">
-                                    {normalizeGenderLabel(player.gender)} ·{" "}
-                                    {player.level}
-                                  </span>
-                                </p>
-                              ))}
-                            </div>
-                          </div>
+                        {(() => {
+                          const isThisMatchSelected =
+                            swapSelection?.roundIndex === roundIndex &&
+                            swapSelection?.matchIndex === matchIndex;
 
-                          <div className="text-center text-xs font-black text-slate-400 md:text-sm">
-                            VS
-                          </div>
-
-                          <div className="min-w-0 rounded-xl bg-emerald-50 px-2.5 py-2.5 md:rounded-2xl md:px-3 md:py-3">
-                            <p className="text-xs font-bold text-emerald-700">
-                              팀 B
-                            </p>
-                            <div className="mt-2 space-y-1.5">
-                              {match.teamB.players.map((player) => (
-                                <p
-                                  key={player.playerId}
-                                  className="truncate text-[15px] font-semibold leading-6 text-slate-900 md:text-sm"
-                                >
-                                  {player.name}
-                                  <span className="ml-2 text-xs font-medium text-slate-500">
-                                    {normalizeGenderLabel(player.gender)} ·{" "}
-                                    {player.level}
-                                  </span>
+                          const renderTeam = (team: "A" | "B") => {
+                            const teamData = team === "A" ? match.teamA : match.teamB;
+                            return (
+                              <div
+                                className={[
+                                  "min-w-0 rounded-xl px-2.5 py-2.5 md:rounded-2xl md:px-3 md:py-3",
+                                  team === "A" ? "bg-sky-50" : "bg-emerald-50",
+                                ].join(" ")}
+                              >
+                                <p className={["text-xs font-bold", team === "A" ? "text-sky-700" : "text-emerald-700"].join(" ")}>
+                                  팀 {team}
                                 </p>
-                              ))}
+                                <div className="mt-2 space-y-1">
+                                  {teamData.players.map((player, playerIndex) => {
+                                    const isSelected =
+                                      swapSelection?.roundIndex === roundIndex &&
+                                      swapSelection?.matchIndex === matchIndex &&
+                                      swapSelection?.team === team &&
+                                      swapSelection?.playerIndex === playerIndex;
+                                    const isSwappable = isThisMatchSelected && !isSelected;
+                                    return (
+                                      <button
+                                        key={player.playerId}
+                                        type="button"
+                                        onClick={() => handlePlayerClick(roundIndex, matchIndex, team, playerIndex)}
+                                        className={[
+                                          "w-full rounded-lg px-2 py-1.5 text-left transition",
+                                          isSelected
+                                            ? "bg-sky-500 ring-2 ring-sky-400 ring-offset-1"
+                                            : isSwappable
+                                              ? "bg-white ring-1 ring-sky-300 hover:ring-sky-400"
+                                              : "hover:bg-white/70",
+                                        ].join(" ")}
+                                      >
+                                        <span className={["truncate text-[15px] font-semibold leading-6 md:text-sm", isSelected ? "text-white" : "text-slate-900"].join(" ")}>
+                                          {player.name}
+                                        </span>
+                                        <span className={["ml-2 text-xs font-medium", isSelected ? "text-sky-100" : "text-slate-500"].join(" ")}>
+                                          {normalizeGenderLabel(player.gender)} · {player.level}
+                                        </span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          };
+
+                          return (
+                            <div className="mt-3 grid grid-cols-[minmax(0,1fr)_2.5rem_minmax(0,1fr)] items-center gap-2 md:gap-3">
+                              {renderTeam("A")}
+                              <div className="text-center text-xs font-black text-slate-400 md:text-sm">VS</div>
+                              {renderTeam("B")}
                             </div>
-                          </div>
-                        </div>
+                          );
+                        })()}
                       </div>
                     ))}
 

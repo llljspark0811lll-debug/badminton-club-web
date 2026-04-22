@@ -11,11 +11,16 @@ type DashboardHeaderProps = {
 
 export function DashboardHeader({
   clubName,
+  subscriptionEnd,
   onAddMember,
   onLogout,
   onOpenPersonalSettings,
   onRestartTutorial,
 }: DashboardHeaderProps) {
+  const subscriptionLabel = subscriptionEnd
+    ? new Date(subscriptionEnd).toLocaleDateString("ko-KR")
+    : "체험판 사용 중";
+
   return (
     <div className="flex flex-col gap-4 border-b border-slate-200 pb-6 md:flex-row md:items-end md:justify-between">
       <div>
@@ -71,7 +76,7 @@ export function DashboardHeader({
         <p className="mt-3 text-xs font-medium text-slate-400">
           구독 만료일 {subscriptionLabel}
         </p>
-        */}
+        */}        
       </div>
 
       <div className="flex flex-col items-stretch gap-3 md:items-end">
