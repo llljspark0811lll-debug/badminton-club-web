@@ -60,9 +60,11 @@ function useSpotlight(open: boolean, targetId?: string) {
       const el = document.querySelector(`[data-tutorial-id="${targetId}"]`) as HTMLElement | null;
       if (el) {
         const isMobile = window.innerWidth < 768;
-        // 모바일: start → 요소를 화면 상단으로 (카드 가림 방지, 패널은 상단부터 표시)
+        const isTabTarget = !!targetId?.startsWith("tab-");
+        // 모바일 탭: end → 탭이 뷰포트 하단에 위치해 하단 고정 카드와 가까워짐
+        // 모바일 패널: start → 패널 상단부터 보이게
         // 데스크탑: nearest → 이미 보이면 그대로
-        el.scrollIntoView({ behavior: "smooth", block: isMobile ? "start" : "nearest", inline: "nearest" });
+        el.scrollIntoView({ behavior: "smooth", block: isMobile ? (isTabTarget ? "end" : "start") : "nearest", inline: "nearest" });
         setRect(el.getBoundingClientRect());
         return;
       }
@@ -120,7 +122,7 @@ export function TutorialModal({
         return {
           title: "회원 탭에서 클럽 회원을 관리합니다",
           description:
-            "회원 탭은 클럽 회원 명단을 모아두는 공간입니다.\n실제 운영에서는 가입 링크로 들어온 회원이나 관리자가 직접 등록한 회원이 이곳에 쌓입니다.",
+            "회원 탭은 클럽 회원 명단을 모아두는 공간입니다.\n실제 운영에서는 가입 링크로 들어온 회원이나 관리자가 직접 등록한 회원이 이 곳에 등록됩니다.",
           targetId: "tab-members",
         };
       case "membersList":
@@ -394,7 +396,7 @@ export function TutorialModal({
 
       <div
         ref={cardRef}
-        className="pointer-events-auto absolute bottom-4 left-1/2 z-[91] w-[min(92vw,27rem)] -translate-x-1/2 rounded-[1.25rem] border border-white/70 bg-white/95 p-5 shadow-[0_24px_70px_rgba(15,23,42,0.24)] backdrop-blur md:bottom-auto md:left-auto md:right-6 md:top-1/2 md:-translate-y-1/2 md:translate-x-0"
+        className={`pointer-events-auto absolute left-1/2 z-[91] w-[min(92vw,27rem)] -translate-x-1/2 rounded-[1.25rem] border border-white/70 bg-white/95 p-5 shadow-[0_24px_70px_rgba(15,23,42,0.24)] backdrop-blur md:bottom-auto md:left-auto md:right-6 md:top-1/2 md:-translate-y-1/2 md:translate-x-0 ${step === "generate" ? "top-4 bottom-auto" : "bottom-4 top-auto"}`}
       >
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-600">
