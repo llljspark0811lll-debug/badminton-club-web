@@ -1392,10 +1392,10 @@ export default function PublicSessionPage() {
 
         <ParticipantGroups title="회원 참석 현황" participants={registeredMembers} emptyMessage="아직 참석 신청한 회원이 없습니다." />
         <ParticipantGroups title="게스트 참석 현황" participants={registeredGuests} emptyMessage="아직 등록된 게스트가 없습니다." />
-        <ParticipantGroups title="대기 중인 회원 현황" participants={waitlistedMembers} emptyMessage="현재 대기 중인 회원이 없습니다." />
-        <ParticipantGroups title="대기 중인 게스트 현황" participants={waitlistedGuests} emptyMessage="현재 대기 중인 게스트가 없습니다." />
         <ParticipantGroups title="불참 회원 현황" participants={absentMembers} emptyMessage="불참 회원이 없습니다." />
         <ParticipantGroups title="불참 게스트 현황" participants={absentGuests} emptyMessage="불참 게스트가 없습니다." />
+        <ParticipantGroups title="대기 중인 회원 현황" participants={waitlistedMembers} emptyMessage="현재 대기 중인 회원이 없습니다." />
+        <ParticipantGroups title="대기 중인 게스트 현황" participants={waitlistedGuests} emptyMessage="현재 대기 중인 게스트가 없습니다." />
       </div>
     </main>
   );
