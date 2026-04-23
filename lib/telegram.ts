@@ -15,7 +15,7 @@ export type TelegramAlertInput =
   | { event: "SESSION_RESPOND_REGISTER"; clubName: string; sessionTitle: string; memberName: string; guestCount: number; status: string }
   | { event: "SESSION_RESPOND_CANCEL"; clubName: string; sessionTitle: string; memberName: string }
   | { event: "SESSION_BRACKET_CREATE"; clubName: string; sessionTitle: string }
-  | { event: "SUPPORT_INQUIRY"; clubName: string; adminEmail: string; category: string; preview: string };
+  | { event: "SUPPORT_INQUIRY"; clubName: string; adminEmail: string; category: string; message: string };
 
 // ─── Config ─────────────────────────────────────────────────────────────────
 
@@ -109,7 +109,8 @@ function buildAlertMessage(input: TelegramAlertInput): string {
         `클럽: ${input.clubName}`,
         `이메일: ${input.adminEmail}`,
         `유형: ${input.category}`,
-        `내용: ${input.preview}`,
+        `─────────────────`,
+        input.message,
       ].join("\n");
   }
 }

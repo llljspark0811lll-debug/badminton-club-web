@@ -84,7 +84,7 @@ export function SupportModal({ open, onClose }: SupportModalProps) {
           <div>
             <h2 className="text-lg font-black text-slate-900">문의 / 피드백</h2>
             <p className="mt-0.5 text-xs text-slate-500">
-              보내주신 내용을 확인 후 이메일로 답변드립니다
+              보내주신 내용을 확인 후 이메일로 답변드립니다 (1–2 영업일)
             </p>
           </div>
           <button
@@ -178,7 +178,7 @@ export function SupportModal({ open, onClose }: SupportModalProps) {
             </button>
 
             <p className="mt-3 text-center text-xs text-slate-400">
-              답변은 등록된 관리자 이메일로 전달됩니다
+              등록된 관리자 이메일로 직접 답변드립니다
             </p>
           </div>
         )}
