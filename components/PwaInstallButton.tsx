@@ -70,8 +70,15 @@ export default function PwaInstallButton() {
   useEffect(() => {
     setMounted(true);
 
+    // 레이아웃 인라인 스크립트가 이미 캡처해둔 이벤트 사용
+    const cached = (window as typeof window & { __pwaInstallEvent?: Event }).__pwaInstallEvent;
+    if (cached) {
+      setDeferredPrompt(cached as DeferredBeforeInstallPromptEvent);
+    }
+
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
+      (window as typeof window & { __pwaInstallEvent?: Event }).__pwaInstallEvent = event;
       setDeferredPrompt(event as DeferredBeforeInstallPromptEvent);
     };
 

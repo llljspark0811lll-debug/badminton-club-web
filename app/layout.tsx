@@ -90,10 +90,10 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <head>
-        {/* React 하이드레이션 전에 PC에서 브라우저 기본 설치 프롬프트를 차단 */}
+        {/* 브라우저 기본 PWA 설치 프롬프트를 전체 차단 (커스텀 버튼만 허용) */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){window.addEventListener('beforeinstallprompt',function(e){if(!/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)){e.preventDefault();}});})();`,
+            __html: `(function(){window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__pwaInstallEvent=e;});})();`,
           }}
         />
       </head>
