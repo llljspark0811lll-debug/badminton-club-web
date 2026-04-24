@@ -92,6 +92,8 @@ export async function POST(req: Request) {
     const guestName = String(body.guestName ?? "").trim();
     const guestGender = String(body.guestGender ?? "").trim();
     const guestLevel = String(body.guestLevel ?? "").trim();
+    const guestAgeRaw = Number(body.guestAge);
+    const guestAge = [20, 30, 40, 50, 60].includes(guestAgeRaw) ? guestAgeRaw : null;
     const hostMemberId = body.hostMemberId ? Number(body.hostMemberId) : null;
 
     if (!guestName) {
@@ -102,11 +104,11 @@ export async function POST(req: Request) {
       await prisma.$executeRaw`
         INSERT INTO "SessionParticipant" (
           "sessionId", "memberId", "hostMemberId", "guestName",
-          "guestGender", "guestLevel", status, "attendanceStatus", "createdAt"
+          "guestAge", "guestGender", "guestLevel", status, "attendanceStatus", "createdAt"
         )
         VALUES (
           ${session.id}, NULL, ${hostMemberId}, ${guestName},
-          ${guestGender}, ${guestLevel}, ${nextStatus}, 'PENDING', NOW()
+          ${guestAge}, ${guestGender}, ${guestLevel}, ${nextStatus}, 'PENDING', NOW()
         )
       `;
     } else {

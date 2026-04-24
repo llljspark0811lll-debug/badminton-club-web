@@ -6,6 +6,13 @@ import type { Member, SessionParticipant } from "@/components/dashboard/types";
 type Tab = "member" | "guest";
 
 const LEVELS = ["S", "A", "B", "C", "D", "E", "초심"];
+const AGE_GROUPS = [
+  { label: "10/20대", value: 20 },
+  { label: "30대", value: 30 },
+  { label: "40대", value: 40 },
+  { label: "50대", value: 50 },
+  { label: "60대", value: 60 },
+];
 
 type AdminRegisterModalProps = {
   open: boolean;
@@ -73,6 +80,7 @@ export function AdminRegisterModal({
   const [successMsg, setSuccessMsg] = useState("");
 
   const [guestName, setGuestName] = useState("");
+  const [guestAge, setGuestAge] = useState<number | "">("");
   const [guestGender, setGuestGender] = useState("");
   const [guestLevel, setGuestLevel] = useState("");
   const [hostMemberId, setHostMemberId] = useState<number | "">("");
@@ -126,6 +134,7 @@ export function AdminRegisterModal({
 
   function resetGuestForm() {
     setGuestName("");
+    setGuestAge("");
     setGuestGender("");
     setGuestLevel("");
     setHostMemberId("");
@@ -181,6 +190,7 @@ export function AdminRegisterModal({
           sessionId,
           type: "guest",
           guestName: guestName.trim(),
+          guestAge: guestAge || null,
           guestGender,
           guestLevel,
           hostMemberId: hostMemberId || null,
@@ -340,6 +350,26 @@ export function AdminRegisterModal({
                   onChange={(e) => setGuestName(e.target.value)}
                   className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
                 />
+              </div>
+
+              {/* 연령대 */}
+              <div>
+                <label className="mb-1.5 block text-xs font-bold text-slate-700">연령대</label>
+                <div className="flex flex-wrap gap-2">
+                  {AGE_GROUPS.map(({ label, value }) => (
+                    <button
+                      key={value}
+                      onClick={() => setGuestAge(guestAge === value ? "" : value)}
+                      className={`rounded-2xl border px-4 py-2 text-sm font-bold transition ${
+                        guestAge === value
+                          ? "bg-sky-600 text-white border-sky-600"
+                          : "bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* 성별 */}

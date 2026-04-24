@@ -205,6 +205,15 @@ function StatChip({
   );
 }
 
+function ageGroupLabel(age: number | null): string {
+  if (!age) return "나이 미정";
+  if (age <= 29) return "10/20대";
+  if (age <= 39) return "30대";
+  if (age <= 49) return "40대";
+  if (age <= 59) return "50대";
+  return "60대";
+}
+
 function ParticipantCard({ participant }: { participant: Participant }) {
   const isGuest = participant.type === "GUEST";
   return (
@@ -214,7 +223,7 @@ function ParticipantCard({ participant }: { participant: Participant }) {
           <div className="text-sm font-black text-slate-900">{participant.name}</div>
           <div className="mt-1 text-xs text-slate-500">
             {isGuest
-              ? `${participant.age ? `${participant.age}세` : "나이 미정"} · 게스트`
+              ? `${ageGroupLabel(participant.age)} · 게스트`
               : "회원"}
           </div>
           {isGuest && participant.hostMemberName && (
@@ -1076,39 +1085,52 @@ export default function PublicSessionPage() {
                   <p className="text-sm leading-6 text-slate-500">
                     회원이 아니어도 게스트로 참석 신청할 수 있습니다. 신청 취소는 관리자를 통해 처리됩니다.
                   </p>
-                  <input
-                    value={guestName}
-                    onChange={(e) => setGuestName(e.target.value)}
-                    placeholder="이름"
-                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-sky-400"
-                  />
-                  <input
-                    value={guestAge}
-                    onChange={(e) => setGuestAge(e.target.value.replace(/\D/g, "").slice(0, 3))}
-                    inputMode="numeric"
-                    placeholder="나이"
-                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-sky-400"
-                  />
-                  <select
-                    value={guestGender}
-                    onChange={(e) => setGuestGender(e.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-sky-400"
-                  >
-                    <option value="">성별 선택</option>
-                    {GENDERS.map((g) => (
-                      <option key={g} value={g}>{g}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={guestLevel}
-                    onChange={(e) => setGuestLevel(e.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-sky-400"
-                  >
-                    <option value="">급수 선택</option>
-                    {LEVELS.map((l) => (
-                      <option key={l} value={l}>{l}</option>
-                    ))}
-                  </select>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      value={guestName}
+                      onChange={(e) => setGuestName(e.target.value)}
+                      placeholder="이름"
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-sky-400"
+                    />
+                    <div className="grid grid-cols-5 gap-1">
+                      {[{ label: "10/20대", value: "20" }, { label: "30대", value: "30" }, { label: "40대", value: "40" }, { label: "50대", value: "50" }, { label: "60대", value: "60" }].map(({ label, value }) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setGuestAge(guestAge === value ? "" : value)}
+                          className={`rounded-2xl border py-3 text-sm font-bold transition text-center ${
+                            guestAge === value
+                              ? "bg-sky-500 text-white border-sky-500"
+                              : "bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <select
+                      value={guestGender}
+                      onChange={(e) => setGuestGender(e.target.value)}
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-sky-400"
+                    >
+                      <option value="">성별 선택</option>
+                      {GENDERS.map((g) => (
+                        <option key={g} value={g}>{g}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={guestLevel}
+                      onChange={(e) => setGuestLevel(e.target.value)}
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-sky-400"
+                    >
+                      <option value="">급수 선택</option>
+                      {LEVELS.map((l) => (
+                        <option key={l} value={l}>{l}</option>
+                      ))}
+                    </select>
+                  </div>
                   {guestSubmitSuccessMessage ? (
                     <div className="rounded-[1.5rem] border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-semibold text-emerald-700">
                       {guestSubmitSuccessMessage}
@@ -1240,21 +1262,32 @@ export default function PublicSessionPage() {
                                 삭제
                               </button>
                             </div>
-                            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                              <input value={guest.name} onChange={(event) => setIdentifiedMember((previous) => previous ? { ...previous, guests: previous.guests.map((item, guestIndex) => guestIndex === index ? { ...item, name: event.target.value } : item) } : previous)} placeholder="게스트 이름" className="rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-sky-400" />
-                              <input value={guest.age} onChange={(event) => setIdentifiedMember((previous) => previous ? { ...previous, guests: previous.guests.map((item, guestIndex) => guestIndex === index ? { ...item, age: event.target.value.replace(/\D/g, "").slice(0, 3) } : item) } : previous)} inputMode="numeric" placeholder="나이" className="rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-sky-400" />
-                              <select value={guest.gender} onChange={(event) => setIdentifiedMember((previous) => previous ? { ...previous, guests: previous.guests.map((item, guestIndex) => guestIndex === index ? { ...item, gender: event.target.value } : item) } : previous)} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-sky-400">
-                                <option value="">성별 선택</option>
-                                {GENDERS.map((gender) => (
-                                  <option key={gender} value={gender}>{gender}</option>
-                                ))}
-                              </select>
-                              <select value={guest.level} onChange={(event) => setIdentifiedMember((previous) => previous ? { ...previous, guests: previous.guests.map((item, guestIndex) => guestIndex === index ? { ...item, level: event.target.value } : item) } : previous)} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-sky-400">
-                                <option value="">급수 선택</option>
-                                {LEVELS.map((level) => (
-                                  <option key={level} value={level}>{level}</option>
-                                ))}
-                              </select>
+                            <div className="mt-3 space-y-2">
+                              <div className="grid grid-cols-2 gap-2">
+                                <input value={guest.name} onChange={(event) => setIdentifiedMember((previous) => previous ? { ...previous, guests: previous.guests.map((item, guestIndex) => guestIndex === index ? { ...item, name: event.target.value } : item) } : previous)} placeholder="게스트 이름" className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-sky-400" />
+                                <div className="grid grid-cols-5 gap-1">
+                                  {[{ label: "10/20대", value: "20" }, { label: "30대", value: "30" }, { label: "40대", value: "40" }, { label: "50대", value: "50" }, { label: "60대", value: "60" }].map(({ label, value }) => (
+                                    <button key={value} type="button"
+                                      onClick={() => setIdentifiedMember((previous) => previous ? { ...previous, guests: previous.guests.map((item, guestIndex) => guestIndex === index ? { ...item, age: item.age === value ? "" : value } : item) } : previous)}
+                                      className={`rounded-2xl border py-3 text-sm font-bold transition text-center ${guest.age === value ? "bg-sky-500 text-white border-sky-500" : "bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50"}`}
+                                    >{label}</button>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <select value={guest.gender} onChange={(event) => setIdentifiedMember((previous) => previous ? { ...previous, guests: previous.guests.map((item, guestIndex) => guestIndex === index ? { ...item, gender: event.target.value } : item) } : previous)} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-sky-400">
+                                  <option value="">성별 선택</option>
+                                  {GENDERS.map((gender) => (
+                                    <option key={gender} value={gender}>{gender}</option>
+                                  ))}
+                                </select>
+                                <select value={guest.level} onChange={(event) => setIdentifiedMember((previous) => previous ? { ...previous, guests: previous.guests.map((item, guestIndex) => guestIndex === index ? { ...item, level: event.target.value } : item) } : previous)} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-sky-400">
+                                  <option value="">급수 선택</option>
+                                  {LEVELS.map((level) => (
+                                    <option key={level} value={level}>{level}</option>
+                                  ))}
+                                </select>
+                              </div>
                             </div>
                           </div>
                         ))

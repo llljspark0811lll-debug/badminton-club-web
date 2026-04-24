@@ -24,6 +24,7 @@ export async function POST(req: Request) {
     const token = String(body.token ?? "").trim();
     const name = String(body.name ?? "").trim();
     const age = String(body.age ?? "").replace(/\D/g, "");
+    const VALID_AGE_GROUPS = [20, 30, 40, 50, 60];
     const gender = String(body.gender ?? "").trim();
     const level = String(body.level ?? "").trim();
 
@@ -49,9 +50,9 @@ export async function POST(req: Request) {
     }
 
     const ageNumber = Number(age);
-    if (!Number.isInteger(ageNumber) || ageNumber < 1 || ageNumber > 120) {
+    if (!VALID_AGE_GROUPS.includes(ageNumber)) {
       return NextResponse.json(
-        { error: "나이는 1세부터 120세 사이로 입력해주세요." },
+        { error: "연령대를 선택해주세요." },
         { status: 400 }
       );
     }
