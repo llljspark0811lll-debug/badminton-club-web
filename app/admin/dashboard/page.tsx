@@ -1920,7 +1920,6 @@ export default function DashboardPage() {
           <DashboardHeader
             clubName={clubInfo?.name ?? "클럽"}
             subscriptionEnd={clubInfo?.subscriptionEnd}
-            onAddMember={openCreateMemberModal}
             onOpenPersonalSettings={openPersonalSettingsModal}
             onRestartTutorial={openTutorial}
             onOpenSupport={() => setSupportModalOpen(true)}
@@ -1962,6 +1961,7 @@ export default function DashboardPage() {
               customFieldLabel={
                 clubInfo?.customFieldLabel ?? "소속클럽"
               }
+              onAddMember={openCreateMemberModal}
               onEdit={openEditMemberModal}
               onDelete={(id) => {
                 handleMemberDelete(id).catch((error: Error) => {
