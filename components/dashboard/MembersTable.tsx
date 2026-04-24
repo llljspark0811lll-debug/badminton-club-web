@@ -229,17 +229,28 @@ export function MembersTable({
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="mt-4 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex gap-2">
+              <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700">
+                전체 {members.length}명
+              </span>
+              <span className="rounded-full bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-700">
+                남자 {maleCount}명
+              </span>
+              <span className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700">
+                여자 {femaleCount}명
+              </span>
+            </div>
+            <button
+              onClick={onAddMember}
+              data-tutorial-id="add-member-button"
+              className="rounded-2xl bg-sky-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-sky-700"
+            >
+              회원 직접 등록
+            </button>
+          </div>
           <div className="flex flex-wrap gap-2">
-            <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700">
-              전체 {members.length}명
-            </span>
-            <span className="rounded-full bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-700">
-              남자 {maleCount}명
-            </span>
-            <span className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700">
-              여자 {femaleCount}명
-            </span>
             {levels.map((level) => {
               const count = members.filter(
                 (member) => member.level === level
@@ -257,13 +268,6 @@ export function MembersTable({
               );
             })}
           </div>
-          <button
-            onClick={onAddMember}
-            data-tutorial-id="add-member-button"
-            className="rounded-2xl bg-sky-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-sky-700"
-          >
-            회원 직접 등록
-          </button>
         </div>
 
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">

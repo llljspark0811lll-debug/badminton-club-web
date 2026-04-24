@@ -45,22 +45,22 @@ export function DashboardHeader({
         */}        
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex w-full items-center gap-1.5 md:w-auto md:gap-2">
         <button
           onClick={onRestartTutorial}
-          className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+          className="flex-1 whitespace-nowrap rounded-2xl border border-slate-200 bg-white px-2 py-2.5 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 md:flex-none md:px-4 md:text-sm"
         >
           사용 가이드
         </button>
         <button
           onClick={onOpenSupport}
-          className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+          className="flex-1 whitespace-nowrap rounded-2xl border border-slate-200 bg-white px-2 py-2.5 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 md:flex-none md:px-4 md:text-sm"
         >
           문의 / 요청
         </button>
         <button
           onClick={onLogout}
-          className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+          className="flex-1 whitespace-nowrap rounded-2xl border border-slate-200 bg-white px-2 py-2.5 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 md:flex-none md:px-4 md:text-sm"
         >
           로그아웃
         </button>
@@ -68,7 +68,7 @@ export function DashboardHeader({
           onClick={onOpenPersonalSettings}
           aria-label="개인 설정"
           title="개인 설정"
-          className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800"
+          className="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 md:h-11 md:w-11"
         >
           <svg
             aria-hidden="true"
