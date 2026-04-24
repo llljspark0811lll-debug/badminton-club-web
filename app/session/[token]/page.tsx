@@ -11,6 +11,7 @@ type Participant = {
   age: number | null;
   gender: string | null;
   level: string | null;
+  hostMemberName?: string | null;
 };
 
 type SessionData = {
@@ -204,16 +205,23 @@ function StatChip({
 }
 
 function ParticipantCard({ participant }: { participant: Participant }) {
+  const isGuest = participant.type === "GUEST";
   return (
     <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <div className="text-sm font-black text-slate-900">{participant.name}</div>
           <div className="mt-1 text-xs text-slate-500">
-            {participant.type === "GUEST"
+            {isGuest
               ? `${participant.age ? `${participant.age}세` : "나이 미정"} · 게스트`
               : "회원"}
           </div>
+          {isGuest && participant.hostMemberName && (
+            <div className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-700">
+              <span>🤝</span>
+              <span>동반 회원 {participant.hostMemberName}</span>
+            </div>
+          )}
         </div>
         <div className="flex flex-wrap justify-end gap-2">
           <span

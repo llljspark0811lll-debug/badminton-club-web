@@ -65,6 +65,9 @@ async function findSessionByPublicToken(token: string) {
                 level: true,
               },
             },
+            hostMember: {
+              select: { name: true },
+            },
           },
           orderBy: {
             createdAt: "asc",
@@ -98,6 +101,9 @@ async function findSessionByPublicToken(token: string) {
               gender: true,
               level: true,
             },
+          },
+          hostMember: {
+            select: { name: true },
           },
         },
         orderBy: {
@@ -153,6 +159,10 @@ export async function GET(
         guestLevel?: string | null;
       };
 
+      const hostMemberParticipant = participant as typeof participant & {
+        hostMember?: { name: string } | null;
+      };
+
       return {
         id: participant.id,
         type: participant.guestName ? ("GUEST" as const) : ("MEMBER" as const),
@@ -166,6 +176,7 @@ export async function GET(
           guestProfileParticipant.guestLevel ??
           participant.member?.level ??
           null,
+        hostMemberName: hostMemberParticipant.hostMember?.name ?? null,
       };
     };
 
