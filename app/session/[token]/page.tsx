@@ -37,6 +37,7 @@ type SessionData = {
   registeredParticipants: Participant[];
   waitlistedParticipants: Participant[];
   absentParticipants: Participant[];
+  pendingMembers: { id: number; name: string }[];
 };
 
 type SessionComment = {
@@ -241,6 +242,44 @@ function ParticipantCard({ participant }: { participant: Participant }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function PendingMembersSection({
+  members,
+}: {
+  members: { id: number; name: string }[];
+}) {
+  return (
+    <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+      <div className="flex items-center gap-3">
+        <h3 className="text-2xl font-black text-slate-900">미투표 회원 현황</h3>
+        <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-500">
+          {members.length}명
+        </span>
+      </div>
+      <p className="mt-2 text-sm leading-6 text-slate-500">
+        아직 참석·불참 응답을 하지 않은 회원입니다.
+      </p>
+
+      {members.length === 0 ? (
+        <div className="mt-6 rounded-[1.5rem] border border-dashed border-slate-200 bg-slate-50 px-5 py-10 text-center text-sm text-slate-400">
+          모든 회원이 응답을 완료했습니다 🎉
+        </div>
+      ) : (
+        <div className="mt-5 flex flex-wrap gap-2">
+          {members.map((member) => (
+            <div
+              key={member.id}
+              className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm font-bold text-slate-600"
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+              {member.name}
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -1402,6 +1441,7 @@ export default function PublicSessionPage() {
         <ParticipantGroups title="게스트 참석 현황" participants={registeredGuests} emptyMessage="아직 등록된 게스트가 없습니다." />
         <ParticipantGroups title="불참 회원 현황" participants={absentMembers} emptyMessage="불참 회원이 없습니다." />
         <ParticipantGroups title="불참 게스트 현황" participants={absentGuests} emptyMessage="불참 게스트가 없습니다." />
+        <PendingMembersSection members={session?.pendingMembers ?? []} />
         <ParticipantGroups title="대기 중인 회원 현황" participants={waitlistedMembers} emptyMessage="현재 대기 중인 회원이 없습니다." />
         <ParticipantGroups title="대기 중인 게스트 현황" participants={waitlistedGuests} emptyMessage="현재 대기 중인 게스트가 없습니다." />
       </div>

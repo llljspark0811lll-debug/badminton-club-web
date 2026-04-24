@@ -150,6 +150,21 @@ export async function GET(
         participant.hostMemberId === null
     );
 
+    // 미투표 회원: 활성 회원 중 이 세션에 아무 응답도 없는 회원
+    const allActiveMembers = await prisma.member.findMany({
+      where: { clubId: session.clubId, deleted: false, status: "approved" },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    });
+    const respondedMemberIds = new Set(
+      session.participants
+        .filter((p) => p.member !== null)
+        .map((p) => p.member!.id)
+    );
+    const pendingMembers = allActiveMembers.filter(
+      (m) => !respondedMemberIds.has(m.id)
+    );
+
     const toPublicParticipant = (
       participant: (typeof session.participants)[number]
     ) => {
@@ -211,6 +226,7 @@ export async function GET(
       registeredParticipants: registeredParticipants.map(toPublicParticipant),
       waitlistedParticipants: waitlistedParticipants.map(toPublicParticipant),
       absentParticipants: absentParticipants.map(toPublicParticipant),
+      pendingMembers,
     });
   } catch (error) {
     console.error(error);
