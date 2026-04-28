@@ -1,17 +1,8 @@
 import type { MetadataRoute } from "next";
 
-function getBaseUrl() {
-  return (
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.APP_BASE_URL ||
-    (process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : "https://cockmanager.kr")
-  );
-}
+const baseUrl = "https://cockmanager.kr";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = getBaseUrl();
   const now = new Date();
 
   return [

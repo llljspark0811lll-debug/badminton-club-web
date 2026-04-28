@@ -13,22 +13,12 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const siteTitle = "콕매니저🏸";
+const siteUrl = "https://cockmanager.kr";
+const siteTitle = "콕매니저";
 const siteDescription = "배드민턴 클럽/소모임 운영 관리 프로그램";
 
 function getMetadataBase() {
-  const configuredUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.APP_BASE_URL ||
-    (process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : "https://cockmanager.kr");
-
-  try {
-    return new URL(configuredUrl);
-  } catch {
-    return new URL("https://cockmanager.kr");
-  }
+  return new URL(siteUrl);
 }
 
 export const metadata: Metadata = {
