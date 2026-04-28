@@ -4,8 +4,6 @@ import { prisma } from "@/lib/prisma";
 import { sendTelegramAlert, type TelegramAlertInput } from "@/lib/telegram";
 
 type ActivityBody =
-  | { event: "ADMIN_MEMBERS_TAB_CLICK" }
-  | { event: "ADMIN_FEES_TAB_CLICK" }
   | {
       event: "SESSION_BRACKET_EXPORT";
       sessionTitle: string;
@@ -35,11 +33,7 @@ export async function POST(req: Request) {
 
     let payload: TelegramAlertInput | null = null;
 
-    if (body.event === "ADMIN_MEMBERS_TAB_CLICK") {
-      payload = { event: "ADMIN_MEMBERS_TAB_CLICK", clubName };
-    } else if (body.event === "ADMIN_FEES_TAB_CLICK") {
-      payload = { event: "ADMIN_FEES_TAB_CLICK", clubName };
-    } else if (body.event === "SESSION_BRACKET_EXPORT") {
+    if (body.event === "SESSION_BRACKET_EXPORT") {
       payload = {
         event: "SESSION_BRACKET_EXPORT",
         clubName,

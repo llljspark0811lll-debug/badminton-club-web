@@ -597,28 +597,6 @@ export default function DashboardPage() {
     }
   }
 
-  function handleDashboardTabChange(tab: DashboardTab) {
-    setActiveTab(tab);
-
-    if (tab !== "members" && tab !== "fees") {
-      return;
-    }
-
-    const event =
-      tab === "members"
-        ? "ADMIN_MEMBERS_TAB_CLICK"
-        : "ADMIN_FEES_TAB_CLICK";
-
-    void fetch("/api/admin/activity", {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ event }),
-    }).catch(() => undefined);
-  }
-
   useEffect(() => {
     refreshClubInfo().catch((error: Error) => {
       alert(error.message);
@@ -1962,7 +1940,7 @@ export default function DashboardPage() {
               requestsCount={
                 clubInfo?.pendingRequestCount ?? requests.length
               }
-              onChange={handleDashboardTabChange}
+              onChange={setActiveTab}
             />
           </div>
         </div>
