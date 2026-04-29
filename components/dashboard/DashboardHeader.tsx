@@ -49,22 +49,22 @@ export function DashboardHeader({
         */}
       </div>
 
-      <div className="flex w-full items-center gap-1.5 md:w-auto md:gap-2">
+      <div className="flex w-full flex-wrap items-center gap-1.5 md:w-auto md:flex-nowrap md:gap-2">
         <button
           onClick={onRestartTutorial}
-          className="flex-1 whitespace-nowrap rounded-2xl border border-slate-200 bg-white px-2 py-2.5 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 md:flex-none md:px-4 md:text-sm"
+          className="min-w-0 flex-1 whitespace-nowrap rounded-2xl border border-slate-200 bg-white px-2 py-2.5 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 md:flex-none md:px-4 md:text-sm"
         >
           사용 가이드
         </button>
         <button
           onClick={onOpenSupport}
-          className="flex-1 whitespace-nowrap rounded-2xl border border-slate-200 bg-white px-2 py-2.5 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 md:flex-none md:px-4 md:text-sm"
+          className="min-w-0 flex-1 whitespace-nowrap rounded-2xl border border-slate-200 bg-white px-2 py-2.5 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 md:flex-none md:px-4 md:text-sm"
         >
           문의 / 요청
         </button>
         <button
           onClick={onLogout}
-          className="flex-1 whitespace-nowrap rounded-2xl border border-slate-200 bg-white px-2 py-2.5 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 md:flex-none md:px-4 md:text-sm"
+          className="min-w-0 flex-1 whitespace-nowrap rounded-2xl border border-slate-200 bg-white px-2 py-2.5 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 md:flex-none md:px-4 md:text-sm"
         >
           로그아웃
         </button>
