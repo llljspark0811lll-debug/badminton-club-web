@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 const siteUrl = "https://cockmanager.kr";
-const siteTitle = "콕매니저";
+const siteTitle = "콕매니저🏸";
 const siteDescription = "배드민턴 클럽/소모임 운영 관리 프로그램";
 
 function getMetadataBase() {

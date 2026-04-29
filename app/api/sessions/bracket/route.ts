@@ -64,6 +64,7 @@ async function findSessionForBracket(sessionId: number, clubId: number) {
             id: true,
             memberId: true,
             guestName: true,
+            guestAge: true,
             guestGender: true,
             guestLevel: true,
             hostMember: {
@@ -77,6 +78,7 @@ async function findSessionForBracket(sessionId: number, clubId: number) {
                 id: true,
                 name: true,
                 gender: true,
+                birth: true,
                 level: true,
               },
             },
@@ -118,6 +120,7 @@ async function findSessionForBracket(sessionId: number, clubId: number) {
               id: true,
               name: true,
               gender: true,
+              birth: true,
               level: true,
             },
           },
@@ -133,6 +136,7 @@ function buildBracketPlayers(
     id: number;
     memberId: number | null;
     guestName?: string | null;
+    guestAge?: number | null;
     guestGender?: string | null;
     guestLevel?: string | null;
     hostMember?: { id: number; name: string } | null;
@@ -140,6 +144,7 @@ function buildBracketPlayers(
       id: number;
       name: string;
       gender: string;
+      birth?: Date | null;
       level: string;
     } | null;
   }>
@@ -156,6 +161,7 @@ function buildBracketPlayers(
         name: stripSamplePrefix(participant.member.name),
         gender: participant.member.gender,
         level: participant.member.level,
+        birth: participant.member.birth ?? null,
         isGuest: false,
         hostName: null,
       });
@@ -169,6 +175,7 @@ function buildBracketPlayers(
         name: stripSamplePrefix(participant.guestName),
         gender: participant.guestGender ?? "",
         level: participant.guestLevel ?? "",
+        age: participant.guestAge ?? null,
         isGuest: true,
         hostName: participant.hostMember ? stripSamplePrefix(participant.hostMember.name) : null,
       });

@@ -13,6 +13,8 @@ export type SessionBracketPlayerInput = {
   name: string;
   gender: string;
   level: string;
+  birth?: string | Date | null;
+  age?: number | null;
   isGuest: boolean;
   hostName: string | null;
 };
@@ -27,7 +29,9 @@ export type SessionBracketGenerationInput = {
 };
 
 type DivisionKey = "ALL" | "MEN" | "WOMEN";
-type InternalPlayer = SessionBracketPlayerEntry;
+type InternalPlayer = SessionBracketPlayerEntry & {
+  age: number | null;
+};
 type RandomFn = () => number;
 
 type PlayerState = {
@@ -121,11 +125,114 @@ function getLevelScore(level: string) {
   return LEVEL_SCORE_MAP[level] ?? LEVEL_SCORE_MAP["초심"];
 }
 
+function normalizeAge(value: number | null | undefined) {
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+
+  const age = Math.floor(Number(value));
+  return age > 0 ? age : null;
+}
+
+function getAgeFromBirth(value: string | Date | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const birthDate = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(birthDate.getTime())) {
+    return null;
+  }
+
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthGap = today.getMonth() - birthDate.getMonth();
+
+  if (
+    monthGap < 0 ||
+    (monthGap === 0 && today.getDate() < birthDate.getDate())
+  ) {
+    age -= 1;
+  }
+
+  return age > 0 ? age : null;
+}
+
+function getAgeBandAdjustment(age: number | null) {
+  if (age === null) {
+    return 0;
+  }
+
+  if (age >= 60) {
+    return -4;
+  }
+
+  if (age >= 50) {
+    return -3;
+  }
+
+  if (age >= 40) {
+    return -2;
+  }
+
+  if (age >= 30) {
+    return -1;
+  }
+
+  return 0;
+}
+
+function getGenderAdjustment(gender: string, separateByGender: boolean) {
+  if (separateByGender) {
+    return 0;
+  }
+
+  const normalized = String(gender ?? "").trim().toLowerCase();
+  return ["여", "여자", "f", "female"].includes(normalized) ? -1 : 0;
+}
+
+function getAdjustedPlayerScore(
+  level: string,
+  gender: string,
+  age: number | null,
+  separateByGender: boolean
+) {
+  const ageBalanceLevels = ["S", "A", "B", "C", "D"] as const;
+  const genderBalanceLevels = ["S", "A", "B", "C", "D", "珥덉떖"] as const;
+  const levelIndex = ageBalanceLevels.indexOf(
+    level as (typeof ageBalanceLevels)[number]
+  );
+
+  if (levelIndex === -1) {
+    return getLevelScore(level);
+  }
+
+  const agePenalty = Math.abs(getAgeBandAdjustment(age));
+  const ageAdjustedIndex = Math.min(
+    ageBalanceLevels.length - 1,
+    levelIndex + agePenalty
+  );
+  const ageAdjustedLevel = ageBalanceLevels[ageAdjustedIndex]!;
+
+  const genderPenalty = Math.abs(
+    getGenderAdjustment(gender, separateByGender)
+  );
+  const genderBaseIndex = genderBalanceLevels.indexOf(ageAdjustedLevel);
+  const adjustedIndex = Math.min(
+    genderBalanceLevels.length - 1,
+    genderBaseIndex + genderPenalty
+  );
+
+  return getLevelScore(genderBalanceLevels[adjustedIndex]!);
+}
+
 function createPlayerEntry(
-  input: SessionBracketPlayerInput
+  input: SessionBracketPlayerInput,
+  separateByGender: boolean
 ): InternalPlayer {
   const gender = normalizeGender(input.gender);
   const level = normalizeLevel(input.level);
+  const age = normalizeAge(input.age) ?? getAgeFromBirth(input.birth);
 
   return {
     playerId: input.playerId,
@@ -133,7 +240,8 @@ function createPlayerEntry(
     name: input.name.trim(),
     gender,
     level,
-    score: getLevelScore(level),
+    score: getAdjustedPlayerScore(level, gender, age, separateByGender),
+    age,
     isGuest: input.isGuest,
     hostName: input.hostName,
   };
@@ -887,7 +995,9 @@ export function generateSessionBracket(
   };
 
   const players = shuffleArray(
-    input.players.map(createPlayerEntry),
+    input.players.map((player) =>
+      createPlayerEntry(player, config.separateByGender)
+    ),
     random
   );
   validateGenerationInput(players, config);
