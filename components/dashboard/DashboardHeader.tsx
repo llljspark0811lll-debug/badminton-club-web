@@ -53,18 +53,16 @@ export function DashboardHeader({
           <button
             onClick={onRestartTutorial}
             className="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white px-1 py-2 text-[10px] font-semibold leading-none tracking-[-0.02em] text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 md:flex-none md:px-4 md:py-2.5 md:text-sm md:leading-normal md:tracking-normal"
-            aria-label="사용 가이드"
+            aria-label="사용가이드"
           >
-            <span className="md:hidden">가이드</span>
-            <span className="hidden md:inline">사용 가이드</span>
+            사용가이드
           </button>
           <button
             onClick={onOpenSupport}
             className="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white px-1 py-2 text-[10px] font-semibold leading-none tracking-[-0.02em] text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 md:flex-none md:px-4 md:py-2.5 md:text-sm md:leading-normal md:tracking-normal"
-            aria-label="문의 / 요청"
+            aria-label="문의/요청"
           >
-            <span className="md:hidden">문의</span>
-            <span className="hidden md:inline">문의 / 요청</span>
+            문의/요청
           </button>
           <button
             onClick={onLogout}
