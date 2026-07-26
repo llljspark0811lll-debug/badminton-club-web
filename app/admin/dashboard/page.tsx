@@ -2429,6 +2429,7 @@ export default function DashboardPage() {
         {activeTab === "deleted" ? (
           <DeletedMembersTable
             members={deletedMembers}
+            clubLevels={levels}
             customFieldLabel={
               clubInfo?.customFieldLabel ?? "소속클럽"
             }

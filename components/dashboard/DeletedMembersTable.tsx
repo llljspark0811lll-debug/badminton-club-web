@@ -1,4 +1,4 @@
-import type { Member } from "@/components/dashboard/types";
+import type { ClubLevel, Member } from "@/components/dashboard/types";
 import {
   formatDate,
   formatPhoneNumber,
@@ -9,18 +9,28 @@ import {
 
 type DeletedMembersTableProps = {
   members: Member[];
+  clubLevels: ClubLevel[];
   customFieldLabel: string;
   onRestore: (id: number) => void;
   onPermanentDelete: (id: number) => void;
 };
 
+function getLevelName(level: string, clubLevels: ClubLevel[]) {
+  return (
+    clubLevels.find((clubLevel) => String(clubLevel.rank) === level)?.name ??
+    level
+  );
+}
+
 function DeletedMemberCard({
   member,
+  clubLevels,
   customFieldLabel,
   onRestore,
   onPermanentDelete,
 }: {
   member: Member;
+  clubLevels: ClubLevel[];
   customFieldLabel: string;
   onRestore: (id: number) => void;
   onPermanentDelete: (id: number) => void;
@@ -45,7 +55,7 @@ function DeletedMemberCard({
                 member.level
               )}`}
             >
-              {member.level}
+              {getLevelName(member.level, clubLevels)}
             </span>
           </div>
         </div>
@@ -93,6 +103,7 @@ function DeletedMemberCard({
 
 export function DeletedMembersTable({
   members,
+  clubLevels,
   customFieldLabel,
   onRestore,
   onPermanentDelete,
@@ -145,7 +156,7 @@ export function DeletedMembersTable({
                       member.level
                     )}`}
                   >
-                    {member.level}
+                    {getLevelName(member.level, clubLevels)}
                   </span>
                 </td>
                 <td className="px-4 py-4 text-slate-400">
@@ -197,6 +208,7 @@ export function DeletedMembersTable({
           <DeletedMemberCard
             key={member.id}
             member={member}
+            clubLevels={clubLevels}
             customFieldLabel={customFieldLabel}
             onRestore={onRestore}
             onPermanentDelete={onPermanentDelete}
