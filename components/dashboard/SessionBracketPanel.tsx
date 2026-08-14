@@ -264,10 +264,11 @@ export function SessionBracketPanel({
   const [generationMode, setGenerationMode] = useState<
     "STANDARD" | "TEAM_BATTLE"
   >("STANDARD");
+  type DoublesMode = "RANDOM" | "MIXED_PRIORITY" | "GENDER_SEPARATED";
   type SlotSettings = {
     courtCount: number;
     minGamesPerPlayer: number;
-    separateByGender: boolean;
+    doublesMode: DoublesMode;
     fixedPairs: Array<[string, string]>;
   };
   const [slotSettings, setSlotSettings] = useState<Record<string, SlotSettings>>({});
@@ -319,11 +320,12 @@ export function SessionBracketPanel({
   const _defaultSlotSettings: SlotSettings = {
     courtCount: tutorialDefaultsActive ? 2 : buildDefaultCourtCount(session),
     minGamesPerPlayer: tutorialDefaultsActive ? 4 : 2,
-    separateByGender: false,
+    doublesMode: "RANDOM",
     fixedPairs: [],
   };
-  const { courtCount, minGamesPerPlayer, separateByGender, fixedPairs } =
+  const { courtCount, minGamesPerPlayer, doublesMode, fixedPairs } =
     slotSettings[slotKey] ?? _defaultSlotSettings;
+  const separateByGender = doublesMode === "GENDER_SEPARATED";
 
   function updateCurrentSlot(patch: Partial<SlotSettings>) {
     setSlotSettings((prev) => ({
@@ -333,7 +335,7 @@ export function SessionBracketPanel({
   }
   const setCourtCount = (n: number) => updateCurrentSlot({ courtCount: clampCourtCount(n) });
   const setMinGamesPerPlayer = (n: number) => updateCurrentSlot({ minGamesPerPlayer: n });
-  const setSeparateByGender = (b: boolean) => updateCurrentSlot({ separateByGender: b });
+  const setDoublesMode = (mode: DoublesMode) => updateCurrentSlot({ doublesMode: mode });
   function setFixedPairs(
     updater: Array<[string, string]> | ((prev: Array<[string, string]>) => Array<[string, string]>)
   ) {
@@ -466,7 +468,9 @@ export function SessionBracketPanel({
               [currentSlotKey]: {
                 courtCount: data.bracket!.config.courtCount,
                 minGamesPerPlayer: data.bracket!.config.minGamesPerPlayer,
-                separateByGender: data.bracket!.config.separateByGender,
+                doublesMode:
+                  data.bracket!.config.doublesMode ??
+                  (data.bracket!.config.separateByGender ? "GENDER_SEPARATED" : "RANDOM"),
                 fixedPairs: data.bracket!.config.fixedPairs ?? [],
               },
             }));
@@ -606,6 +610,9 @@ export function SessionBracketPanel({
         if (femaleCount < 4) errors.push(`${name} 여복 (${femaleCount}명): 4명 미만 — 대진 생성 불가`);
       } else {
         if (count < 4) errors.push(`${name} (${count}명): 4명 미만 — 대진 생성 불가`);
+        if (doublesMode === "MIXED_PRIORITY" && maleCount + femaleCount < count) {
+          errors.push(`${name}: 혼복 우선은 모든 참가자의 성별 정보가 필요합니다.`);
+        }
       }
     };
     if (levelMode === "separate") {
@@ -634,7 +641,7 @@ export function SessionBracketPanel({
       }
     }
     return errors;
-  }, [levelMode, separateGroups, filterGroupsWithCounts, unassignedLevels, separateByGender, courtCount, registeredCount]);
+  }, [levelMode, separateGroups, filterGroupsWithCounts, unassignedLevels, separateByGender, doublesMode, courtCount, registeredCount]);
 
   // 급수 구분 모드: 모든 그룹 라운드를 합산해서 표시
   // MergedMatch = SessionBracketMatch + 그룹 메타 (cast로 접근)
@@ -957,6 +964,7 @@ export function SessionBracketPanel({
         courtCount: totalCourtCount,
         minGamesPerPlayer,
         separateByGender,
+        doublesMode,
         relaxedMode,
         generationMode,
         teamAssignments,
@@ -1800,18 +1808,54 @@ export function SessionBracketPanel({
             </select>
           </label>
 
-          <label className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700">
-            <input
-              type="checkbox"
-              checked={separateByGender}
-              onChange={(event) =>
-                setSeparateByGender(event.target.checked)
-              }
-              disabled={!canGenerate || loading}
-              className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-            />
-            남복 / 여복 분리 생성
-          </label>
+          <div className="space-y-1.5 md:col-span-2">
+            <span className="text-xs font-bold text-slate-500">복식 구성 방식</span>
+            <div className="grid gap-2 md:grid-cols-3">
+              {(
+                [
+                  {
+                    value: "RANDOM" as DoublesMode,
+                    label: "랜덤 복식",
+                    description: "성별 구성 제한 없음",
+                    activeClass: "border-sky-400 bg-sky-50 text-sky-900 ring-1 ring-sky-200 shadow-sm shadow-sky-100",
+                    inactiveClass: "border-sky-200 bg-sky-50/40 text-sky-900 hover:border-sky-300 hover:bg-sky-50",
+                  },
+                  {
+                    value: "GENDER_SEPARATED" as DoublesMode,
+                    label: "남복 / 여복 분리",
+                    description: "경기별 성별 완전 분리",
+                    activeClass: "border-emerald-400 bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200 shadow-sm shadow-emerald-100",
+                    inactiveClass: "border-emerald-200 bg-emerald-50/40 text-emerald-900 hover:border-emerald-300 hover:bg-emerald-50",
+                  },
+                  {
+                    value: "MIXED_PRIORITY" as DoublesMode,
+                    label: "혼복 우선",
+                    description: "혼복 우선, 잔여 인원은 남복·여복",
+                    activeClass: "border-violet-400 bg-violet-50 text-violet-900 ring-1 ring-violet-200 shadow-sm shadow-violet-100",
+                    inactiveClass: "border-violet-200 bg-violet-50/40 text-violet-900 hover:border-violet-300 hover:bg-violet-50",
+                  },
+                ] as const
+              )
+                .filter((option) => generationMode === "STANDARD" || option.value !== "MIXED_PRIORITY")
+                .map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setDoublesMode(option.value)}
+                    disabled={!canGenerate || loading}
+                    className={[
+                      "rounded-2xl border px-3 py-3 text-left transition disabled:cursor-not-allowed disabled:opacity-50",
+                      doublesMode === option.value
+                        ? option.activeClass
+                        : option.inactiveClass,
+                    ].join(" ")}
+                  >
+                    <span className="block text-sm font-bold">{option.label}</span>
+                    <span className="mt-1 block text-[11px] leading-4 text-slate-500">{option.description}</span>
+                  </button>
+                ))}
+            </div>
+          </div>
         </div>
         </div>
 
@@ -2296,7 +2340,7 @@ export function SessionBracketPanel({
         {loaded && bracket ? (
           <div className="space-y-5">
             <div className="grid gap-3 md:grid-cols-3">
-              <div className="rounded-2xl bg-slate-50 p-4">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm shadow-slate-100">
                 <p className="text-xs font-semibold text-slate-500">
                   생성 라운드
                 </p>
@@ -2304,7 +2348,7 @@ export function SessionBracketPanel({
                   {displaySummary?.totalRounds ?? 0}
                 </p>
               </div>
-              <div className="rounded-2xl bg-slate-50 p-4">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm shadow-slate-100">
                 <p className="text-xs font-semibold text-slate-500">
                   총 경기 수
                 </p>
@@ -2312,7 +2356,7 @@ export function SessionBracketPanel({
                   {displaySummary?.totalMatches ?? 0}
                 </p>
               </div>
-              <div className="rounded-2xl bg-slate-50 p-4">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm shadow-slate-100">
                 <p className="text-xs font-semibold text-slate-500">
                   생성 조건
                 </p>
@@ -2322,9 +2366,11 @@ export function SessionBracketPanel({
                   <br />
                   {bracket.config.generationMode === "TEAM_BATTLE"
                     ? `${teamLabels.A || "팀A"} vs ${teamLabels.B || "팀B"}`
-                    : bracket.config.separateByGender
-                      ? "남복/여복 분리"
-                      : "랜덤 복식"}
+                    : (bracket.config.doublesMode ?? (bracket.config.separateByGender ? "GENDER_SEPARATED" : "RANDOM")) === "MIXED_PRIORITY"
+                      ? "혼복 우선"
+                      : bracket.config.separateByGender
+                        ? "남복/여복 분리"
+                        : "랜덤 복식"}
                 </p>
               </div>
             </div>

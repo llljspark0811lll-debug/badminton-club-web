@@ -69,6 +69,7 @@ export type TelegramAlertInput =
       courtCount: number;
       minGamesPerPlayer: number;
       separateByGender: boolean;
+      doublesMode?: "RANDOM" | "MIXED_PRIORITY" | "GENDER_SEPARATED";
       fixedPairsCount: number;
       totalPlayers: number;
       maleCount: number;
@@ -401,7 +402,7 @@ function buildAlertMessage(input: TelegramAlertInput): string {
         `유형: ${getBracketModeLabel(input.generationMode)}`,
         `코트 수: ${input.courtCount}코트`,
         `최소 경기 수: ${input.minGamesPerPlayer}경기`,
-        `성별 분리: ${input.separateByGender ? "남복/여복 분리" : "통합 복식"}`,
+        `복식 구성: ${input.doublesMode === "MIXED_PRIORITY" ? "혼복 우선" : input.separateByGender ? "남복/여복 분리" : "랜덤 복식"}`,
         `고정 파트너: ${input.fixedPairsCount > 0 ? `${input.fixedPairsCount}쌍` : "없음"}`,
         `참가 선수: 총 ${input.totalPlayers}명 (남 ${input.maleCount}명 / 여 ${input.femaleCount}명)`,
         ...(levelSummary ? [`급수별: ${levelSummary}`] : []),

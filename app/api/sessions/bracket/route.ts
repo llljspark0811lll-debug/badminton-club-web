@@ -8,6 +8,7 @@ import { Prisma } from "@prisma/client";
 import {
   generateSessionBracket,
   generateSessionBracketLevelGroups,
+  normalizeDoublesMode,
   normalizeLevel,
   type SessionBracketPlayerInput,
 } from "@/lib/session-bracket";
@@ -552,10 +553,15 @@ export async function POST(req: Request) {
     const sessionId = Number(body.sessionId);
     const courtCount = Number(body.courtCount);
     const minGamesPerPlayer = Number(body.minGamesPerPlayer);
-    const separateByGender = Boolean(body.separateByGender);
+    const legacySeparateByGender = Boolean(body.separateByGender);
     const relaxedMode = Boolean(body.relaxedMode);
     const generationMode =
       body.generationMode === "TEAM_BATTLE" ? "TEAM_BATTLE" : "STANDARD";
+    const doublesMode =
+      generationMode === "TEAM_BATTLE" && body.doublesMode === "MIXED_PRIORITY"
+        ? "RANDOM"
+        : normalizeDoublesMode(body.doublesMode, legacySeparateByGender);
+    const separateByGender = doublesMode === "GENDER_SEPARATED";
     const teamAssignments = normalizeTeamAssignments(body.teamAssignments);
     const rawTeamLabels =
       body.teamLabels && typeof body.teamLabels === "object"
@@ -668,7 +674,8 @@ export async function POST(req: Request) {
         minGamesPerPlayer,
         separateByGender,
         relaxedMode,
-        Date.now() + Math.floor(Math.random() * 1_000_000)
+        Date.now() + Math.floor(Math.random() * 1_000_000),
+        doublesMode
       );
 
       const levelGroupRounds: Record<string, SessionBracketRound[]> = {};
@@ -684,6 +691,7 @@ export async function POST(req: Request) {
         courtCount: totalCourtCount,
         minGamesPerPlayer,
         separateByGender,
+        doublesMode,
         relaxedMode,
         generationMode: "STANDARD" as const,
         fixedPairs,
@@ -744,6 +752,7 @@ export async function POST(req: Request) {
         courtCount: totalCourtCount,
         minGamesPerPlayer,
         separateByGender,
+        doublesMode,
         fixedPairsCount: fixedPairs.length,
         ...stats,
         levelGroupRounds: groupResults.map((result) => ({
@@ -768,6 +777,7 @@ export async function POST(req: Request) {
       courtCount,
       minGamesPerPlayer,
       separateByGender,
+      doublesMode,
       relaxedMode,
       generationMode,
       teamAssignments,
@@ -814,6 +824,7 @@ export async function POST(req: Request) {
       courtCount,
       minGamesPerPlayer,
       separateByGender,
+      doublesMode,
       fixedPairsCount: fixedPairs.length,
       ...stats,
       rounds: generated.rounds,
@@ -854,4 +865,3 @@ export async function POST(req: Request) {
     );
   }
 }
-

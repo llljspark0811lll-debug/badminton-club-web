@@ -253,9 +253,11 @@ function renderSummary(bracket: SessionBracket, y: number) {
     },
     {
       label: "생성 방식",
-      value: isMultiGroup
-        ? (bracket.config.levelMode === "filter" ? "급수필터별" : "동일급수별")
-        : bracket.config.separateByGender ? "남복 / 여복 분리" : "랜덤 복식",
+      value: `${isMultiGroup
+        ? (bracket.config.levelMode === "filter" ? "급수필터별 · " : "동일급수별 · ")
+        : ""}${bracket.config.doublesMode === "MIXED_PRIORITY"
+        ? "혼복 우선"
+        : bracket.config.separateByGender ? "남복 / 여복 분리" : "랜덤 복식"}`,
       fill: "#0f172a",
     },
   ];
@@ -320,9 +322,11 @@ function renderSummaryCards(bracket: SessionBracket, y: number) {
     },
     {
       label: "생성 방식",
-      value: bracket.config.separateByGender
-        ? "\uB0A8\uBCF5 / \uC5EC\uBCF5 \uBD84\uB9AC"
-        : "\uB79C\uB364 \uBCF5\uC2DD",
+      value: bracket.config.doublesMode === "MIXED_PRIORITY"
+        ? "혼복 우선"
+        : bracket.config.separateByGender
+          ? "\uB0A8\uBCF5 / \uC5EC\uBCF5 \uBD84\uB9AC"
+          : "\uB79C\uB364 \uBCF5\uC2DD",
       fill: "#0f172a",
     },
   ];

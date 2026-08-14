@@ -176,10 +176,13 @@ export interface SessionBracketLevelGroupData {
   summary: SessionBracketSummary;
 }
 
+export type DoublesMode = "RANDOM" | "MIXED_PRIORITY" | "GENDER_SEPARATED";
+
 export interface SessionBracketConfig {
   courtCount: number;
   minGamesPerPlayer: number;
   separateByGender: boolean;
+  doublesMode?: DoublesMode;
   relaxedMode?: boolean;
   generationMode?: "STANDARD" | "TEAM_BATTLE";
   teamAssignments?: Record<string, "A" | "B">;
