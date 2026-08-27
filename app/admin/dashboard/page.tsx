@@ -32,6 +32,11 @@ import { TutorialModal } from "@/components/dashboard/TutorialModal";
 import { SupportModal } from "@/components/dashboard/SupportModal";
 import { DeleteAccountModal } from "@/components/dashboard/DeleteAccountModal";
 import ScrollToTopButton from "@/components/ScrollToTopButton";
+import {
+  ACTIVE_BANNER_DAYS_THRESHOLD,
+  getDaysRemaining,
+  TRIAL_BANNER_DAYS_THRESHOLD,
+} from "@/lib/subscription";
 import type {
   ClubInfo,
   ClubLevel,
@@ -231,23 +236,21 @@ export default function DashboardPage() {
   const [tutorialBracketGenerated, setTutorialBracketGenerated] =
     useState(false);
 
-  // Trial banner: show when 1–10 days remaining (day 20–29 of 30-day trial)
+  // Trial and paid-subscription reminders intentionally use separate thresholds.
   const subscriptionEndDate = clubInfo?.subscriptionEnd
     ? new Date(clubInfo.subscriptionEnd)
     : null;
-  const trialDaysRemaining = subscriptionEndDate
-    ? Math.ceil((subscriptionEndDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-    : null;
+  const trialDaysRemaining = getDaysRemaining(subscriptionEndDate);
   const showTrialBanner =
     clubInfo?.calculatedStatus === "TRIAL" &&
     trialDaysRemaining !== null &&
     trialDaysRemaining >= 1 &&
-    trialDaysRemaining <= 10;
+    trialDaysRemaining <= TRIAL_BANNER_DAYS_THRESHOLD;
   const showActiveBanner =
     clubInfo?.calculatedStatus === "ACTIVE" &&
     trialDaysRemaining !== null &&
     trialDaysRemaining >= 1 &&
-    trialDaysRemaining <= 10;
+    trialDaysRemaining <= ACTIVE_BANNER_DAYS_THRESHOLD;
   const showStatusBar =
     clubInfo?.calculatedStatus === "ACTIVE" && !showActiveBanner;
   const showExemptBar = clubInfo?.calculatedStatus === "EXEMPT";

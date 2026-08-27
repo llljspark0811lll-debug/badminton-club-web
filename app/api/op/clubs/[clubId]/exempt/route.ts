@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isOpAuthenticated } from "@/lib/op-auth";
 import { prisma } from "@/lib/prisma";
+import { getTrialEndDate } from "@/lib/subscription";
 
 // POST /api/op/clubs/[clubId]/exempt  → toggle EXEMPT status
 export async function POST(
@@ -22,7 +23,7 @@ export async function POST(
     where: { id: clubId },
     data: {
       subscriptionStatus: exempt ? "EXEMPT" : "TRIAL",
-      subscriptionEnd: exempt ? null : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      subscriptionEnd: exempt ? null : getTrialEndDate(),
     },
   });
 

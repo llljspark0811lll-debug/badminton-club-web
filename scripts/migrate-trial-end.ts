@@ -1,31 +1,28 @@
 /**
- * 기존 클럽들에 subscriptionEnd = 오늘 + 30일 적용
- * EXEMPT 상태 클럽은 건드리지 않음
+ * Legacy utility: 기존 TRIAL 클럽을 가입일 + 체험기간으로 재계산
+ * ACTIVE/EXEMPT 상태 클럽은 건드리지 않음
  *
  * 실행: npx ts-node --skipProject scripts/migrate-trial-end.ts
  */
 import { PrismaClient } from "@prisma/client";
+import { getTrialEndDate, TRIAL_DAYS } from "../lib/subscription";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  const trialEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-  const kst = new Date(trialEnd.getTime() + 9 * 60 * 60 * 1000);
-  console.log(`체험 만료일 설정: ${kst.toISOString().replace("T", " ").slice(0, 19)} KST\n`);
-
-  // subscriptionEnd가 없거나 이미 지난 클럽만 업데이트 (EXEMPT 제외)
-  const result = await prisma.club.updateMany({
-    where: {
-      subscriptionStatus: { not: "EXEMPT" },
-      OR: [
-        { subscriptionEnd: null },
-        { subscriptionEnd: { lt: new Date() } },
-      ],
-    },
-    data: { subscriptionEnd: trialEnd },
+  const trialClubs = await prisma.club.findMany({
+    where: { subscriptionStatus: "TRIAL" },
+    select: { id: true, createdAt: true },
   });
 
-  console.log(`✅ ${result.count}개 클럽에 체험 만료일 설정 완료`);
+  for (const club of trialClubs) {
+    await prisma.club.update({
+      where: { id: club.id },
+      data: { subscriptionEnd: getTrialEndDate(club.createdAt) },
+    });
+  }
+
+  console.log(`✅ ${trialClubs.length}개 TRIAL 클럽 → 가입일 + ${TRIAL_DAYS}일 적용 완료`);
 
   // 결과 확인
   const clubs = await prisma.club.findMany({

@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { createToken, setAuthCookie } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getTrialEndDate } from "@/lib/subscription";
 import { sendTelegramNewClubAlert } from "@/lib/telegram";
 
 const ADMIN_USERNAME_REGEX = /^[a-z0-9]+$/;
@@ -101,14 +102,12 @@ export async function POST(req: Request) {
     const hashedPassword = await bcrypt.hash(String(password), 10);
 
     const result = await prisma.$transaction(async (tx) => {
-      // 5월 15일 이전 가입 클럽은 기존 클럽과 동일하게 6월 14일 만료 통일
-      const LAUNCH_DATE = new Date("2026-05-15T00:00:00+09:00");
-      const trialEnd = Date.now() < LAUNCH_DATE.getTime()
-        ? new Date(LAUNCH_DATE.getTime() + 30 * 24 * 60 * 60 * 1000)
-        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      const trialStart = new Date();
+      const trialEnd = getTrialEndDate(trialStart);
       const club = await tx.club.create({
         data: {
           name: trimmedClubName,
+          createdAt: trialStart,
           subscriptionEnd: trialEnd,
         },
       });

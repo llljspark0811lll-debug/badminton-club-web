@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { TRIAL_DAYS } from "../lib/subscription";
 
 const prisma = new PrismaClient();
 
@@ -27,7 +28,7 @@ async function main() {
   });
 
   const kst = new Date(futureDate.getTime() + 9 * 60 * 60 * 1000);
-  const elapsed = 30 - daysRemaining;
+  const elapsed = TRIAL_DAYS - daysRemaining;
   console.log(`✅ club ID ${admin.clubId} → TRIAL, subscriptionEnd: ${kst.toISOString().slice(0, 10)} KST (${daysRemaining}일 남음, ${elapsed}일차)`);
 }
 

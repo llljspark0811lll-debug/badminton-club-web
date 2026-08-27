@@ -1,5 +1,13 @@
-export const TRIAL_DAYS = 30;
-export const TRIAL_BANNER_DAYS_THRESHOLD = 10; // show banner when ≤ 10 days remaining
+export const TRIAL_DAYS = 15;
+export const TRIAL_BANNER_DAYS_THRESHOLD = 5;
+export const ACTIVE_BANNER_DAYS_THRESHOLD = 10;
+
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
+
+/** Returns the trial end timestamp for a new or newly restored trial. */
+export function getTrialEndDate(start: Date = new Date()): Date {
+  return new Date(start.getTime() + TRIAL_DAYS * DAY_IN_MS);
+}
 
 export const SUBSCRIPTION_PLANS = {
   MONTHLY: { label: "1개월", days: 30, amount: 9900 },
@@ -53,7 +61,7 @@ export function getDaysRemaining(
   return Math.ceil(ms / (1000 * 60 * 60 * 24));
 }
 
-/** True if we should show the "N일 남았어요" trial banner (≤ 10 days remaining) */
+/** True if we should show the trial subscription banner. */
 export function shouldShowTrialBanner(
   status: CalculatedSubscriptionStatus,
   subscriptionEnd: Date | null | undefined,
@@ -74,7 +82,7 @@ export function getNextSubscriptionEnd(
   const baseDate =
     currentEnd && currentEnd.getTime() > now.getTime() ? currentEnd : now;
   return new Date(
-    baseDate.getTime() + SUBSCRIPTION_PLANS[plan].days * 24 * 60 * 60 * 1000
+    baseDate.getTime() + SUBSCRIPTION_PLANS[plan].days * DAY_IN_MS
   );
 }
 
