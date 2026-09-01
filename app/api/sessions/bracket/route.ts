@@ -16,7 +16,14 @@ import { getClubLevels } from "@/lib/club-levels";
 import { ensureSessionBracketTable } from "@/lib/session-bracket-schema";
 import { hasSessionParticipantGuestProfileColumns } from "@/lib/session-participant-schema";
 import { sendTelegramAlert } from "@/lib/telegram";
-import { getVariantKey, normalizeLevelMode, type BracketMode, type LevelMode } from "@/lib/bracket-variant-key";
+import {
+  getVariantKey,
+  normalizeBracketDoublesMode,
+  normalizeLevelMode,
+  type BracketDoublesMode,
+  type BracketMode,
+  type LevelMode,
+} from "@/lib/bracket-variant-key";
 import { NextResponse } from "next/server";
 import type {
   SessionBracketLevelGroupData,
@@ -84,7 +91,8 @@ function normalizeBracketMode(value: string | null | undefined): BracketMode {
 function getStoredBracketVariant(
   bracket: SessionBracketRecord | null,
   mode: BracketMode,
-  levelMode: LevelMode = "none"
+  levelMode: LevelMode = "none",
+  doublesMode: BracketDoublesMode = "RANDOM"
 ) {
   if (!bracket) return null;
 
@@ -98,8 +106,7 @@ function getStoredBracketVariant(
     bracket.summary && typeof bracket.summary === "object"
       ? (bracket.summary as StoredSummaryVariantEnvelope) : null;
 
-  // Try new key: STANDARD_none / STANDARD_separate / STANDARD_filter / TEAM_BATTLE
-  const variantKey = getVariantKey(mode, levelMode);
+  const variantKey = getVariantKey(mode, levelMode, doublesMode);
   const configVariant = configEnvelope?.variants?.[variantKey];
   const roundsVariant = roundsEnvelope?.variants?.[variantKey];
   const summaryVariant = summaryEnvelope?.variants?.[variantKey];
@@ -116,6 +123,30 @@ function getStoredBracketVariant(
     };
   }
 
+  // Backward compatibility: 복식 방식 분리 전 슬롯은 저장된 설정과 일치할 때만 사용한다.
+  const legacyVariantKey = mode === "STANDARD" ? `STANDARD_${levelMode}` : "TEAM_BATTLE";
+  const legacyConfigVariant = configEnvelope?.variants?.[legacyVariantKey];
+  const legacyRoundsVariant = roundsEnvelope?.variants?.[legacyVariantKey];
+  const legacySummaryVariant = summaryEnvelope?.variants?.[legacyVariantKey];
+  if (legacyConfigVariant && legacyRoundsVariant && legacySummaryVariant) {
+    const legacyConfig = legacyConfigVariant.config as Record<string, unknown>;
+    const savedDoublesMode = normalizeBracketDoublesMode(
+      legacyConfig?.doublesMode as string | undefined,
+      Boolean(legacyConfig?.separateByGender)
+    );
+    if (savedDoublesMode === doublesMode) {
+      return {
+        id: bracket.id,
+        sessionId: bracket.sessionId,
+        config: legacyConfigVariant.config,
+        rounds: legacyRoundsVariant.rounds,
+        summary: legacySummaryVariant.summary,
+        createdAt: bracket.createdAt,
+        updatedAt: bracket.updatedAt,
+      };
+    }
+  }
+
   // Backward compat 1: old "STANDARD" key (before per-levelMode refactor)
   if (mode === "STANDARD") {
     const oldConfigVariant = configEnvelope?.variants?.["STANDARD"];
@@ -124,7 +155,12 @@ function getStoredBracketVariant(
 
     if (oldConfigVariant && oldRoundsVariant && oldSummaryVariant) {
       const storedLevelMode = ((oldConfigVariant.config as Record<string, unknown>)?.levelMode ?? "none") as string;
-      if (storedLevelMode === levelMode) {
+      const oldConfig = oldConfigVariant.config as Record<string, unknown>;
+      const savedDoublesMode = normalizeBracketDoublesMode(
+        oldConfig?.doublesMode as string | undefined,
+        Boolean(oldConfig?.separateByGender)
+      );
+      if (storedLevelMode === levelMode && savedDoublesMode === doublesMode) {
         return {
           id: bracket.id,
           sessionId: bracket.sessionId,
@@ -143,12 +179,20 @@ function getStoredBracketVariant(
   if (!configEnvelope?.variants) {
     const directConfig =
       bracket.config && typeof bracket.config === "object"
-        ? (bracket.config as { generationMode?: BracketMode; levelMode?: string })
+        ? (bracket.config as { generationMode?: BracketMode; levelMode?: string; doublesMode?: string; separateByGender?: boolean })
         : null;
     const directMode = normalizeBracketMode(directConfig?.generationMode);
     const directLevelMode = directConfig?.levelMode ?? "none";
+    const directDoublesMode = normalizeBracketDoublesMode(
+      directConfig?.doublesMode,
+      Boolean(directConfig?.separateByGender)
+    );
 
-    if (directMode === mode && (mode !== "STANDARD" || directLevelMode === levelMode)) {
+    if (
+      directMode === mode &&
+      (mode !== "STANDARD" || directLevelMode === levelMode) &&
+      directDoublesMode === doublesMode
+    ) {
       return bracket;
     }
   }
@@ -159,9 +203,10 @@ function getStoredBracketVariant(
 function normalizeSavedBracket(
   bracket: SessionBracketRecord | null,
   mode: BracketMode,
-  levelMode: LevelMode = "none"
+  levelMode: LevelMode = "none",
+  doublesMode: BracketDoublesMode = "RANDOM"
 ) {
-  const target = getStoredBracketVariant(bracket, mode, levelMode);
+  const target = getStoredBracketVariant(bracket, mode, levelMode, doublesMode);
 
   if (!target) {
     return null;
@@ -178,9 +223,10 @@ function normalizeSavedBracket(
       variants?: Record<string, { summary?: unknown; levelGroupSummaries?: unknown }>;
     } | null;
 
-    const variantKey = getVariantKey(mode, levelMode);
-    const rawRoundsVariant = rawRoundsEnvelope?.variants?.[variantKey] ?? rawRoundsEnvelope?.variants?.[mode];
-    const rawSummaryVariant = rawSummaryEnvelope?.variants?.[variantKey] ?? rawSummaryEnvelope?.variants?.[mode];
+    const variantKey = getVariantKey(mode, levelMode, doublesMode);
+    const legacyVariantKey = mode === "STANDARD" ? `STANDARD_${levelMode}` : "TEAM_BATTLE";
+    const rawRoundsVariant = rawRoundsEnvelope?.variants?.[variantKey] ?? rawRoundsEnvelope?.variants?.[legacyVariantKey] ?? rawRoundsEnvelope?.variants?.[mode];
+    const rawSummaryVariant = rawSummaryEnvelope?.variants?.[variantKey] ?? rawSummaryEnvelope?.variants?.[legacyVariantKey] ?? rawSummaryEnvelope?.variants?.[mode];
 
     const levelGroupRounds = (rawRoundsVariant?.levelGroupRounds ?? {}) as Record<string, SessionBracketRound[]>;
     const levelGroupSummaries = (rawSummaryVariant?.levelGroupSummaries ?? {}) as Record<string, SessionBracketSummary>;
@@ -230,6 +276,7 @@ function buildStoredVariantPayload(
   existingBracket: SessionBracketRecord | null,
   mode: BracketMode,
   levelMode: LevelMode,
+  doublesMode: BracketDoublesMode,
   generated: {
     config: unknown;
     rounds: unknown;
@@ -266,26 +313,33 @@ function buildStoredVariantPayload(
     !existingRoundsEnvelope.variants &&
     !existingSummaryEnvelope.variants
   ) {
-    const storedConfig = existingBracket.config as { generationMode?: BracketMode; levelMode?: string } | null;
+    const storedConfig = existingBracket.config as { generationMode?: BracketMode; levelMode?: string; doublesMode?: string; separateByGender?: boolean } | null;
     const migratedMode = normalizeBracketMode(storedConfig?.generationMode);
     const migratedLevelMode = normalizeLevelMode(storedConfig?.levelMode);
-    const migratedKey = getVariantKey(migratedMode, migratedLevelMode);
+    const migratedDoublesMode = normalizeBracketDoublesMode(
+      storedConfig?.doublesMode,
+      Boolean(storedConfig?.separateByGender)
+    );
+    const migratedKey = getVariantKey(migratedMode, migratedLevelMode, migratedDoublesMode);
     configVariants[migratedKey] = { config: existingBracket.config };
     roundsVariants[migratedKey] = { rounds: existingBracket.rounds };
     summaryVariants[migratedKey] = { summary: existingBracket.summary };
   }
 
-  // Migration: old "STANDARD" key → STANDARD_${levelMode} key
+  // Migration: old "STANDARD" key → 복식 방식까지 포함한 키
   if (
     configVariants["STANDARD"] &&
-    !configVariants["STANDARD_none"] &&
-    !configVariants["STANDARD_separate"] &&
-    !configVariants["STANDARD_filter"]
+    !Object.keys(configVariants).some((key) => key.startsWith("STANDARD_") && key.split("_").length >= 3)
   ) {
     const oldLevelMode = normalizeLevelMode(
       (configVariants["STANDARD"].config as Record<string, unknown>)?.levelMode as string | undefined
     );
-    const migratedKey = `STANDARD_${oldLevelMode}`;
+    const oldConfig = configVariants["STANDARD"].config as Record<string, unknown>;
+    const oldDoublesMode = normalizeBracketDoublesMode(
+      oldConfig?.doublesMode as string | undefined,
+      Boolean(oldConfig?.separateByGender)
+    );
+    const migratedKey = getVariantKey("STANDARD", oldLevelMode, oldDoublesMode);
     configVariants[migratedKey] = configVariants["STANDARD"];
     roundsVariants[migratedKey] = roundsVariants["STANDARD"] ?? { rounds: null };
     summaryVariants[migratedKey] = summaryVariants["STANDARD"] ?? { summary: null };
@@ -294,8 +348,33 @@ function buildStoredVariantPayload(
     delete summaryVariants["STANDARD"];
   }
 
+
+  // Migration: 복식 방식 분리 전 STANDARD_{levelMode} / TEAM_BATTLE 슬롯
+  for (const legacyKey of ["STANDARD_none", "STANDARD_separate", "STANDARD_filter", "TEAM_BATTLE"]) {
+    const legacyConfig = configVariants[legacyKey];
+    if (!legacyConfig) continue;
+    const legacyMode: BracketMode = legacyKey === "TEAM_BATTLE" ? "TEAM_BATTLE" : "STANDARD";
+    const legacyLevelMode = legacyMode === "STANDARD"
+      ? normalizeLevelMode(legacyKey.replace("STANDARD_", ""))
+      : "none";
+    const legacyConfigValue = legacyConfig.config as Record<string, unknown>;
+    const legacyDoublesMode = normalizeBracketDoublesMode(
+      legacyConfigValue?.doublesMode as string | undefined,
+      Boolean(legacyConfigValue?.separateByGender)
+    );
+    const migratedKey = getVariantKey(legacyMode, legacyLevelMode, legacyDoublesMode);
+    if (!configVariants[migratedKey]) {
+      configVariants[migratedKey] = legacyConfig;
+      roundsVariants[migratedKey] = roundsVariants[legacyKey] ?? { rounds: null };
+      summaryVariants[migratedKey] = summaryVariants[legacyKey] ?? { summary: null };
+    }
+    delete configVariants[legacyKey];
+    delete roundsVariants[legacyKey];
+    delete summaryVariants[legacyKey];
+  }
+
   // Write the new variant
-  const variantKey = getVariantKey(mode, levelMode);
+  const variantKey = getVariantKey(mode, levelMode, doublesMode);
   configVariants[variantKey] = { config: generated.config };
   roundsVariants[variantKey] = { rounds: generated.rounds };
   summaryVariants[variantKey] = { summary: generated.summary };
@@ -510,6 +589,7 @@ export async function GET(req: Request) {
       searchParams.get("generationMode")
     );
     const levelMode = normalizeLevelMode(searchParams.get("levelMode"));
+    const doublesMode = normalizeBracketDoublesMode(searchParams.get("doublesMode"));
 
     if (!Number.isFinite(sessionId)) {
       return NextResponse.json(
@@ -530,7 +610,7 @@ export async function GET(req: Request) {
       sessionId: session.id,
       sessionTitle: session.title,
       participantCount: session.participants.length,
-      bracket: normalizeSavedBracket(session.bracket, generationMode, levelMode),
+      bracket: normalizeSavedBracket(session.bracket, generationMode, levelMode, doublesMode),
     });
   } catch (error) {
     console.error(error);
@@ -577,14 +657,22 @@ export async function POST(req: Request) {
           ? rawTeamLabels.B.trim()
           : "팀B",
     };
-    const fixedPairs: Array<[string, string]> = Array.isArray(body.fixedPairs)
+    const fixedPairs: Array<[string, string, number]> = Array.isArray(body.fixedPairs)
       ? body.fixedPairs.filter(
-          (pair: unknown): pair is [string, string] =>
+          (pair: unknown): pair is [string, string, number?] =>
             Array.isArray(pair) &&
-            pair.length === 2 &&
+            (pair.length === 2 || pair.length === 3) &&
             typeof pair[0] === "string" &&
-            typeof pair[1] === "string"
-        )
+            typeof pair[1] === "string" &&
+            (pair.length === 2 || typeof pair[2] === "number")
+        ).map(([a, b, targetGames]: [string, string, number?]) => [
+          a,
+          b,
+          Math.min(
+            Math.max(1, Math.floor(minGamesPerPlayer)),
+            Math.max(1, Math.floor(targetGames ?? minGamesPerPlayer))
+          ),
+        ])
       : [];
 
     const levelMode: "none" | "separate" | "filter" =
@@ -708,14 +796,14 @@ export async function POST(req: Request) {
         playerStats: [],
       };
 
-      const storedPayload = buildStoredVariantPayload(session.bracket, "STANDARD", levelMode, {
+      const storedPayload = buildStoredVariantPayload(session.bracket, "STANDARD", levelMode, doublesMode, {
         config: levelConfig,
         rounds: null as unknown,
         summary: aggregateSummary as unknown,
       });
 
       // rounds와 summary를 레벨그룹 구조로 오버라이드
-      const variantKey = getVariantKey("STANDARD", levelMode);
+      const variantKey = getVariantKey("STANDARD", levelMode, doublesMode);
       const roundsEnvelope = storedPayload.rounds as { variants: Record<string, unknown> };
       roundsEnvelope.variants[variantKey] = { rounds: null, levelGroupRounds };
 
@@ -767,7 +855,7 @@ export async function POST(req: Request) {
         sessionId: session.id,
         sessionTitle: session.title,
         participantCount: session.participants.length,
-        bracket: normalizeSavedBracket(savedBracket, "STANDARD", levelMode),
+        bracket: normalizeSavedBracket(savedBracket, "STANDARD", levelMode, doublesMode),
       });
     }
 
@@ -790,6 +878,7 @@ export async function POST(req: Request) {
       session.bracket,
       generationMode,
       levelMode,
+      doublesMode,
       generated
     );
 
@@ -836,7 +925,7 @@ export async function POST(req: Request) {
       sessionId: session.id,
       sessionTitle: session.title,
       participantCount: session.participants.length,
-      bracket: normalizeSavedBracket(savedBracket, generationMode, levelMode),
+      bracket: normalizeSavedBracket(savedBracket, generationMode, levelMode, doublesMode),
     });
   } catch (error) {
     console.error(error);

@@ -190,7 +190,7 @@ export interface SessionBracketConfig {
     A: string;
     B: string;
   };
-  fixedPairs?: Array<[string, string]>;
+  fixedPairs?: Array<[string, string, number?]>;
   levelMode?: LevelMode;
   levelGroups?: SessionBracketLevelGroup[];
 }

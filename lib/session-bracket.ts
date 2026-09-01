@@ -32,8 +32,14 @@ export type SessionBracketGenerationInput = {
     A: string;
     B: string;
   };
-  fixedPairs?: Array<[string, string]>;
+  fixedPairs?: Array<[string, string, number?]>;
   seed?: number;
+};
+
+type FixedPairRule = {
+  playerAId: string;
+  playerBId: string;
+  targetGames: number;
 };
 
 export type DoublesMode = "RANDOM" | "MIXED_PRIORITY" | "GENDER_SEPARATED";
@@ -461,6 +467,96 @@ function buildTeamBattlePools(
 
 function keyForPair(leftId: string, rightId: string) {
   return [leftId, rightId].sort().join(":");
+}
+
+function normalizeFixedPairs(
+  pairs: Array<[string, string, number?]> | undefined,
+  maxGames: number
+): Array<[string, string, number]> {
+  return (pairs ?? []).map(([playerAId, playerBId, requestedGames]) => [
+    playerAId,
+    playerBId,
+    Math.min(
+      maxGames,
+      Math.max(
+        1,
+        Number.isFinite(requestedGames)
+          ? Math.floor(Number(requestedGames))
+          : maxGames
+      )
+    ),
+  ]);
+}
+
+function buildFixedPairRules(
+  pairs: Array<[string, string, number?]>,
+  playerIds: Set<string>
+): FixedPairRule[] {
+  return pairs
+    .filter(
+      ([playerAId, playerBId]) =>
+        playerAId !== playerBId &&
+        playerIds.has(playerAId) &&
+        playerIds.has(playerBId)
+    )
+    .map(([playerAId, playerBId, targetGames]) => ({
+      playerAId,
+      playerBId,
+      targetGames: Math.max(1, Math.floor(targetGames ?? 1)),
+    }));
+}
+
+function getFixedPairConstraints(
+  rules: FixedPairRule[],
+  partnerHistory: Map<string, number>
+) {
+  const activePairMap = new Map<string, string>();
+  const forbiddenPairKeys = new Set<string>();
+
+  for (const rule of rules) {
+    const pairKey = keyForPair(rule.playerAId, rule.playerBId);
+    const gamesTogether = partnerHistory.get(pairKey) ?? 0;
+    if (gamesTogether < rule.targetGames) {
+      activePairMap.set(rule.playerAId, rule.playerBId);
+      activePairMap.set(rule.playerBId, rule.playerAId);
+    } else {
+      forbiddenPairKeys.add(pairKey);
+    }
+  }
+
+  return { activePairMap, forbiddenPairKeys };
+}
+
+function hasForbiddenPartnerPair(
+  teamPlayers: InternalPlayer[],
+  forbiddenPairKeys: Set<string>
+) {
+  return (
+    teamPlayers.length === 2 &&
+    forbiddenPairKeys.has(
+      keyForPair(teamPlayers[0]!.playerId, teamPlayers[1]!.playerId)
+    )
+  );
+}
+
+function assertFixedPairTargetsSatisfied(
+  rules: FixedPairRule[],
+  partnerHistory: Map<string, number>,
+  players: InternalPlayer[]
+) {
+  const playerNames = new Map(players.map((player) => [player.playerId, player.name]));
+  const unsatisfied = rules.find(
+    (rule) =>
+      (partnerHistory.get(keyForPair(rule.playerAId, rule.playerBId)) ?? 0) <
+      rule.targetGames
+  );
+  if (!unsatisfied) return;
+
+  throw new Error(
+    `${playerNames.get(unsatisfied.playerAId) ?? unsatisfied.playerAId} & ${
+      playerNames.get(unsatisfied.playerBId) ?? unsatisfied.playerBId
+    } 파트너가 함께할 경기 수 ${unsatisfied.targetGames}경기를 충족할 수 없습니다. 참가 인원, 팀 배정 또는 파트너 경기 수를 조정해 주세요.`
+  );
 }
 
 function sortPlayersForSelection(
@@ -1265,7 +1361,8 @@ function evaluateQuartetPairings(
   partnerHistory: Map<string, number>,
   opponentHistory: Map<string, number>,
   randomOrder: Map<string, number>,
-  fixedPairMap: Map<string, string>
+  fixedPairMap: Map<string, string>,
+  forbiddenPairKeys: Set<string>
 ): MatchCandidate | null {
   const [p1, p2, p3, p4] = quartet;
   const pairings: [InternalPlayer[], InternalPlayer[]][] = [
@@ -1286,6 +1383,12 @@ function evaluateQuartetPairings(
   let bestCandidate: MatchCandidate | null = null;
 
   for (const [teamAPlayers, teamBPlayers] of pairings) {
+    if (
+      hasForbiddenPartnerPair(teamAPlayers, forbiddenPairKeys) ||
+      hasForbiddenPartnerPair(teamBPlayers, forbiddenPairKeys)
+    ) {
+      continue;
+    }
     // 怨좎젙 ?뚰듃?덇? ?ㅻⅨ ??쇰줈 遺꾨━?섎뒗 諛곗젙? 嫄대꼫?
     if (!isPairingValidForFixedPairs(teamAPlayers!, teamBPlayers!, fixedPairMap)) {
       continue;
@@ -1412,8 +1515,15 @@ function evaluateTeamBattlePairing(
   partnerHistory: Map<string, number>,
   opponentHistory: Map<string, number>,
   randomOrder: Map<string, number>,
-  fixedPairMap: Map<string, string>
+  fixedPairMap: Map<string, string>,
+  forbiddenPairKeys: Set<string>
 ): MatchCandidate | null {
+  if (
+    hasForbiddenPartnerPair(teamAPlayers, forbiddenPairKeys) ||
+    hasForbiddenPartnerPair(teamBPlayers, forbiddenPairKeys)
+  ) {
+    return null;
+  }
   if (
     !isPairingValidForFixedPairs(teamAPlayers, teamBPlayers, fixedPairMap)
   ) {
@@ -1506,7 +1616,8 @@ function buildRoundMatchesForTeamBattlePool(
   opponentHistory: Map<string, number>,
   randomOrder: Map<string, number>,
   random: RandomFn,
-  fixedPairMap: Map<string, string>
+  fixedPairMap: Map<string, string>,
+  forbiddenPairKeys: Set<string>
 ) {
   const remainingTeamA = shuffleArray(selectedTeamAPlayers, random);
   const remainingTeamB = shuffleArray(selectedTeamBPlayers, random);
@@ -1548,7 +1659,8 @@ function buildRoundMatchesForTeamBattlePool(
           partnerHistory,
           opponentHistory,
           randomOrder,
-          fixedPairMap
+          fixedPairMap,
+          forbiddenPairKeys
         );
 
         if (candidate) {
@@ -1604,7 +1716,8 @@ function evaluateMixedGenderPairing(
   partnerHistory: Map<string, number>,
   opponentHistory: Map<string, number>,
   randomOrder: Map<string, number>,
-  fixedPairMap: Map<string, string>
+  fixedPairMap: Map<string, string>,
+  forbiddenPairKeys: Set<string>
 ): MatchCandidate | null {
   const [m1, m2] = maleCouple;
   const [f1, f2] = femaleCouple;
@@ -1619,6 +1732,12 @@ function evaluateMixedGenderPairing(
   let bestCandidate: MatchCandidate | null = null;
 
   for (const [teamAPlayers, teamBPlayers] of pairings) {
+    if (
+      hasForbiddenPartnerPair(teamAPlayers, forbiddenPairKeys) ||
+      hasForbiddenPartnerPair(teamBPlayers, forbiddenPairKeys)
+    ) {
+      continue;
+    }
     if (!isPairingValidForFixedPairs(teamAPlayers, teamBPlayers, fixedPairMap)) {
       continue;
     }
@@ -1700,7 +1819,8 @@ function buildStandardMatchesFromPool(
   opponentHistory: Map<string, number>,
   randomOrder: Map<string, number>,
   random: RandomFn,
-  fixedPairMap: Map<string, string>
+  fixedPairMap: Map<string, string>,
+  forbiddenPairKeys: Set<string>
 ): { matches: SessionBracketMatch[]; nextCourtNumber: number } {
   const ordered = [...players];
   const matches: SessionBracketMatch[] = [];
@@ -1734,7 +1854,8 @@ function buildStandardMatchesFromPool(
         partnerHistory,
         opponentHistory,
         randomOrder,
-        fixedPairMap
+        fixedPairMap,
+        forbiddenPairKeys
       );
       if (candidate) candidates.push(candidate);
     }
@@ -1834,6 +1955,7 @@ function buildRoundMatchesForPool(
   randomOrder: Map<string, number>,
   random: RandomFn,
   fixedPairMap: Map<string, string>,
+  forbiddenPairKeys: Set<string>,
   mixedAllocation?: MixedPriorityAllocation
 ) {
   if (mixedAllocation && pool.key === "ALL") {
@@ -1873,7 +1995,8 @@ function buildRoundMatchesForPool(
             partnerHistory,
             opponentHistory,
             randomOrder,
-            fixedPairMap
+            fixedPairMap,
+            forbiddenPairKeys
           );
           if (candidate) candidates.push(candidate);
         }
@@ -1901,7 +2024,8 @@ function buildRoundMatchesForPool(
         opponentHistory,
         randomOrder,
         random,
-        fixedPairMap
+        fixedPairMap,
+        forbiddenPairKeys
       );
       matches.push(...result.matches);
       nextCourtNumber = result.nextCourtNumber;
@@ -1923,7 +2047,8 @@ function buildRoundMatchesForPool(
     opponentHistory,
     randomOrder,
     random,
-    fixedPairMap
+    fixedPairMap,
+    forbiddenPairKeys
   );
 
   return shuffleArray(result.matches, random).map((match, index) => ({
@@ -2119,7 +2244,7 @@ function generateTeamBattleRounds(
   teamAssignments: Record<string, "A" | "B">,
   randomOrder: Map<string, number>,
   random: RandomFn,
-  fixedPairMap: Map<string, string>
+  fixedPairRules: FixedPairRule[]
 ) {
   const teamLabels = config.teamLabels ?? { A: "팀A", B: "팀B" };
   const pools = buildTeamBattlePools(
@@ -2183,6 +2308,10 @@ function generateTeamBattleRounds(
       break;
     }
 
+    const { activePairMap, forbiddenPairKeys } = getFixedPairConstraints(
+      fixedPairRules,
+      partnerHistory
+    );
     const allocations = allocateMatchesForRoundTeamBattle(
       pools,
       config.courtCount,
@@ -2190,7 +2319,7 @@ function generateTeamBattleRounds(
       previousRested,
       config.minGamesPerPlayer,
       randomOrder,
-      fixedPairMap,
+      activePairMap,
       config.relaxedMode
     );
     const roundMatches: SessionBracketMatch[] = [];
@@ -2206,7 +2335,7 @@ function generateTeamBattleRounds(
         previousRested,
         config.minGamesPerPlayer,
         randomOrder,
-        fixedPairMap
+        activePairMap
       );
 
       const poolMatches = buildRoundMatchesForTeamBattlePool(
@@ -2218,7 +2347,8 @@ function generateTeamBattleRounds(
         opponentHistory,
         randomOrder,
         random,
-        fixedPairMap
+        activePairMap,
+        forbiddenPairKeys
       );
 
       const actualPlayingIds = new Set(
@@ -2276,6 +2406,8 @@ function generateTeamBattleRounds(
       "현재 조건으로는 모든 참가자에게 최소 경기 수를 배정할 수 없습니다. 코트 수나 참가 인원을 다시 확인해 주세요."
     );
   }
+
+  assertFixedPairTargetsSatisfied(fixedPairRules, partnerHistory, players);
 
   for (const player of players) {
     const state = states.get(player.playerId)!;
@@ -2417,7 +2549,7 @@ export type LevelGroupBracketInput = {
   groupId: string;
   groupName: string;
   players: SessionBracketPlayerInput[];
-  fixedPairs: Array<[string, string]>;
+  fixedPairs: Array<[string, string, number?]>;
 };
 
 export type LevelGroupBracketResult = {
@@ -2448,7 +2580,7 @@ export function generateSessionBracketLevelGroups(
     previousRested: Set<string>;
     randomOrder: Map<string, number>;
     random: RandomFn;
-    fixedPairMap: Map<string, string>;
+    fixedPairRules: FixedPairRule[];
     playerEntryMap: Map<string, InternalPlayer>;
     rounds: SessionBracketRound[];
     warnings: string[];
@@ -2471,13 +2603,10 @@ export function generateSessionBracketLevelGroups(
       throw new Error(`"${input.groupName}" 혼복 우선 대진은 모든 참가자의 성별 정보가 필요합니다.`);
     }
     const playerIdSet = new Set(players.map((p) => p.playerId));
-    const fixedPairMap = new Map<string, string>();
-    for (const [a, b] of input.fixedPairs) {
-      if (playerIdSet.has(a) && playerIdSet.has(b) && a !== b) {
-        fixedPairMap.set(a, b);
-        fixedPairMap.set(b, a);
-      }
-    }
+    const fixedPairRules = buildFixedPairRules(
+      normalizeFixedPairs(input.fixedPairs, minGamesPerPlayer),
+      playerIdSet
+    );
     const randomOrder = new Map(players.map((p) => [p.playerId, random()]));
 
     return {
@@ -2493,7 +2622,7 @@ export function generateSessionBracketLevelGroups(
       previousRested: new Set(),
       randomOrder,
       random,
-      fixedPairMap,
+      fixedPairRules,
       playerEntryMap: getEntryMap(players),
       rounds: [],
       warnings: [],
@@ -2576,6 +2705,10 @@ export function generateSessionBracketLevelGroups(
         groupNeeds[gi] === -1 ? minGamesPerPlayer + 1 :
         groupNeeds[gi] === -2 ? minGamesPerPlayer + 2 :
         minGamesPerPlayer;
+      const { activePairMap, forbiddenPairKeys } = getFixedPairConstraints(
+        gs.fixedPairRules,
+        gs.partnerHistory
+      );
 
       // 이 그룹의 1라운드 생성
       let allocations: Map<DivisionKey, number>;
@@ -2622,7 +2755,7 @@ export function generateSessionBracketLevelGroups(
                 gs.previousRested,
                 effectiveMinGames,
                 gs.randomOrder,
-                gs.fixedPairMap
+                activePairMap
               )
             : null;
         if (doublesMode === "MIXED_PRIORITY" && pool.key === "ALL" && matchCount > 0 && !mixedAllocation) {
@@ -2635,7 +2768,7 @@ export function generateSessionBracketLevelGroups(
           gs.previousRested,
           effectiveMinGames,
           gs.randomOrder,
-          gs.fixedPairMap
+          activePairMap
         );
         const poolMatches = buildRoundMatchesForPool(
           pool,
@@ -2645,7 +2778,8 @@ export function generateSessionBracketLevelGroups(
           gs.opponentHistory,
           gs.randomOrder,
           gs.random,
-          gs.fixedPairMap,
+          activePairMap,
+          forbiddenPairKeys,
           mixedAllocation ?? undefined
         );
 
@@ -2693,6 +2827,7 @@ export function generateSessionBracketLevelGroups(
   }
 
   for (const gs of groupStates) {
+    assertFixedPairTargetsSatisfied(gs.fixedPairRules, gs.partnerHistory, gs.players);
     if (doublesMode === "MIXED_PRIORITY") {
       const games = gs.players.map((player) => gs.states.get(player.playerId)?.games ?? 0);
       if (Math.max(...games) - Math.min(...games) > 1) {
@@ -2760,7 +2895,10 @@ export function generateSessionBracket(
             B: input.teamLabels?.B?.trim() || "팀B",
           }
         : undefined,
-    fixedPairs: input.fixedPairs ?? [],
+    fixedPairs: normalizeFixedPairs(
+      input.fixedPairs,
+      Math.max(1, Math.floor(input.minGamesPerPlayer))
+    ),
   };
 
   const players = shuffleArray(
@@ -2773,13 +2911,11 @@ export function generateSessionBracket(
 
   // 怨좎젙 ?뚰듃??留?援ъ꽦 (?묐갑??
   const playerIdSet = new Set(players.map((p) => p.playerId));
-  const fixedPairMap = new Map<string, string>();
-  for (const [idA, idB] of config.fixedPairs ?? []) {
-    if (playerIdSet.has(idA) && playerIdSet.has(idB) && idA !== idB) {
-      fixedPairMap.set(idA, idB);
-      fixedPairMap.set(idB, idA);
-    }
-  }
+  const fixedPairRules = buildFixedPairRules(config.fixedPairs ?? [], playerIdSet);
+  const initialFixedPairMap = getFixedPairConstraints(
+    fixedPairRules,
+    new Map()
+  ).activePairMap;
 
   const randomOrder = new Map(
     players.map((player) => [player.playerId, random()])
@@ -2790,7 +2926,7 @@ export function generateSessionBracket(
       players,
       config,
       config.teamAssignments ?? {},
-      fixedPairMap
+      initialFixedPairMap
     );
 
     return {
@@ -2801,7 +2937,7 @@ export function generateSessionBracket(
         config.teamAssignments ?? {},
         randomOrder,
         random,
-        fixedPairMap
+        fixedPairRules
       ),
     };
   }
@@ -2842,6 +2978,10 @@ export function generateSessionBracket(
       break;
     }
 
+    const { activePairMap, forbiddenPairKeys } = getFixedPairConstraints(
+      fixedPairRules,
+      partnerHistory
+    );
     const allocations = allocateMatchesForRound(
       pools,
       config.courtCount,
@@ -2867,7 +3007,7 @@ export function generateSessionBracket(
               previousRested,
               config.minGamesPerPlayer,
               randomOrder,
-              fixedPairMap
+              activePairMap
             )
           : null;
       if (config.doublesMode === "MIXED_PRIORITY" && pool.key === "ALL" && matchCount > 0 && !mixedAllocation) {
@@ -2880,7 +3020,7 @@ export function generateSessionBracket(
         previousRested,
         config.minGamesPerPlayer,
         randomOrder,
-        fixedPairMap
+        activePairMap
       );
       const poolMatches = buildRoundMatchesForPool(
         pool,
@@ -2890,7 +3030,8 @@ export function generateSessionBracket(
         opponentHistory,
         randomOrder,
         random,
-        fixedPairMap,
+        activePairMap,
+        forbiddenPairKeys,
         mixedAllocation ?? undefined
       );
 
@@ -2951,6 +3092,8 @@ export function generateSessionBracket(
       "현재 조건으로는 모든 참가자에게 최소 경기 수를 배정할 수 없습니다. 코트를 늘리거나 최소 경기 수를 낮춰 주세요."
     );
   }
+
+  assertFixedPairTargetsSatisfied(fixedPairRules, partnerHistory, players);
 
   for (const player of players) {
     const state = states.get(player.playerId)!;

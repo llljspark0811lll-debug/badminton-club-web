@@ -2,7 +2,7 @@ import { requireAuthAdmin, unauthorizedResponse, notFoundResponse } from "@/lib/
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { ensureSessionBracketTable } from "@/lib/session-bracket-schema";
-import { getVariantKey, normalizeLevelMode, type BracketMode } from "@/lib/bracket-variant-key";
+import { getVariantKey, normalizeBracketDoublesMode, normalizeLevelMode, type BracketMode } from "@/lib/bracket-variant-key";
 
 function normalizeBracketMode(value: string | null | undefined): BracketMode {
   return value === "TEAM_BATTLE" ? "TEAM_BATTLE" : "STANDARD";
@@ -19,6 +19,7 @@ export async function PATCH(req: Request) {
     const sessionId = Number(body.sessionId);
     const generationMode = normalizeBracketMode(body.generationMode);
     const levelMode = normalizeLevelMode(body.levelMode);
+    const doublesMode = normalizeBracketDoublesMode(body.doublesMode);
     const roundNumber = Number(body.roundNumber);
     const courtNumber = Number(body.courtNumber);
     const levelGroupId = typeof body.levelGroupId === "string" ? body.levelGroupId : null;
@@ -59,11 +60,19 @@ export async function PATCH(req: Request) {
       levelGroupRounds?: unknown;
     }>;
     const isVariant = Boolean(roundsEnvelope?.variants);
-    const variantKey = getVariantKey(generationMode, levelMode);
+    const variantKey = getVariantKey(generationMode, levelMode, doublesMode);
+    const legacyVariantKey = generationMode === "STANDARD" ? `STANDARD_${levelMode}` : "TEAM_BATTLE";
+    const storageVariantKey = roundsEnvelope.variants?.[variantKey]
+      ? variantKey
+      : roundsEnvelope.variants?.[legacyVariantKey]
+        ? legacyVariantKey
+        : roundsEnvelope.variants?.["STANDARD"]
+          ? "STANDARD"
+          : variantKey;
 
     // 레벨 그룹 모드인지 확인 (새 키, 구 키 순으로 폴백)
     const variantData = isVariant
-      ? (roundsEnvelope.variants?.[variantKey] ?? roundsEnvelope.variants?.["STANDARD"])
+      ? (roundsEnvelope.variants?.[variantKey] ?? roundsEnvelope.variants?.[legacyVariantKey] ?? roundsEnvelope.variants?.["STANDARD"])
       : null;
     const isLevelGroupMode = levelGroupId !== null && variantData && "levelGroupRounds" in variantData;
 
@@ -98,7 +107,7 @@ export async function PATCH(req: Request) {
       const newRoundsPayload = {
         variants: {
           ...roundsEnvelope.variants,
-          [variantKey]: {
+          [storageVariantKey]: {
             ...variantData,
             levelGroupRounds: {
               ...levelGroupRounds,
@@ -129,7 +138,7 @@ export async function PATCH(req: Request) {
     }>;
 
     if (isVariant) {
-      const variantRounds = (roundsEnvelope.variants?.[variantKey] ?? roundsEnvelope.variants?.["STANDARD"])?.rounds;
+      const variantRounds = (roundsEnvelope.variants?.[variantKey] ?? roundsEnvelope.variants?.[legacyVariantKey] ?? roundsEnvelope.variants?.["STANDARD"])?.rounds;
       if (!variantRounds) return notFoundResponse("해당 모드의 대진표가 없습니다.");
       rounds = variantRounds as typeof rounds;
     } else {
@@ -150,7 +159,7 @@ export async function PATCH(req: Request) {
       newRoundsPayload = {
         variants: {
           ...roundsEnvelope.variants,
-          [variantKey]: { rounds },
+          [storageVariantKey]: { rounds },
         },
       };
     } else {

@@ -265,13 +265,15 @@ export function SessionBracketPanel({
     "STANDARD" | "TEAM_BATTLE"
   >("STANDARD");
   type DoublesMode = "RANDOM" | "MIXED_PRIORITY" | "GENDER_SEPARATED";
+  type FixedPairSetting = [string, string, number];
   type SlotSettings = {
     courtCount: number;
     minGamesPerPlayer: number;
     doublesMode: DoublesMode;
-    fixedPairs: Array<[string, string]>;
+    fixedPairs: FixedPairSetting[];
   };
   const [slotSettings, setSlotSettings] = useState<Record<string, SlotSettings>>({});
+  const [doublesModeSelections, setDoublesModeSelections] = useState<Record<string, DoublesMode>>({});
   const [teamLabels, setTeamLabels] = useState({ A: "팀A", B: "팀B" });
   const [teamAssignments, setTeamAssignments] = useState<
     Record<string, "A" | "B">
@@ -312,7 +314,9 @@ export function SessionBracketPanel({
   const swapNoticeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 현재 활성 슬롯 키 / 대진 / 로드 여부 (파생값)
-  const slotKey = generationMode === "TEAM_BATTLE" ? "TEAM_BATTLE" : `STANDARD_${levelMode}`;
+  const baseSlotKey = generationMode === "TEAM_BATTLE" ? "TEAM_BATTLE" : `STANDARD_${levelMode}`;
+  const selectedDoublesMode = doublesModeSelections[baseSlotKey] ?? "RANDOM";
+  const slotKey = `${baseSlotKey}_${selectedDoublesMode}`;
   const bracket = bracketSlots[slotKey] ?? null;
   const loaded = loadedSlots.has(slotKey);
 
@@ -320,11 +324,12 @@ export function SessionBracketPanel({
   const _defaultSlotSettings: SlotSettings = {
     courtCount: tutorialDefaultsActive ? 2 : buildDefaultCourtCount(session),
     minGamesPerPlayer: tutorialDefaultsActive ? 4 : 2,
-    doublesMode: "RANDOM",
+    doublesMode: selectedDoublesMode,
     fixedPairs: [],
   };
-  const { courtCount, minGamesPerPlayer, doublesMode, fixedPairs } =
+  const { courtCount, minGamesPerPlayer, fixedPairs } =
     slotSettings[slotKey] ?? _defaultSlotSettings;
+  const doublesMode = selectedDoublesMode;
   const separateByGender = doublesMode === "GENDER_SEPARATED";
 
   function updateCurrentSlot(patch: Partial<SlotSettings>) {
@@ -334,10 +339,39 @@ export function SessionBracketPanel({
     }));
   }
   const setCourtCount = (n: number) => updateCurrentSlot({ courtCount: clampCourtCount(n) });
-  const setMinGamesPerPlayer = (n: number) => updateCurrentSlot({ minGamesPerPlayer: n });
-  const setDoublesMode = (mode: DoublesMode) => updateCurrentSlot({ doublesMode: mode });
+  const setMinGamesPerPlayer = (n: number) => {
+    setSlotSettings((prev) => {
+      const current = prev[slotKey] ?? _defaultSlotSettings;
+      return {
+        ...prev,
+        [slotKey]: {
+          ...current,
+          minGamesPerPlayer: n,
+          fixedPairs: current.fixedPairs.map(([a, b, targetGames]) => [
+            a,
+            b,
+            targetGames === current.minGamesPerPlayer
+              ? n
+              : Math.min(targetGames, n),
+          ]),
+        },
+      };
+    });
+  };
+  const setDoublesMode = (mode: DoublesMode) => {
+    const targetSlotKey = `${baseSlotKey}_${mode}`;
+    setSlotSettings((prev) => {
+      if (prev[targetSlotKey]) return prev;
+      const current = prev[slotKey] ?? _defaultSlotSettings;
+      return {
+        ...prev,
+        [targetSlotKey]: { ...current, doublesMode: mode },
+      };
+    });
+    setDoublesModeSelections((prev) => ({ ...prev, [baseSlotKey]: mode }));
+  };
   function setFixedPairs(
-    updater: Array<[string, string]> | ((prev: Array<[string, string]>) => Array<[string, string]>)
+    updater: FixedPairSetting[] | ((prev: FixedPairSetting[]) => FixedPairSetting[])
   ) {
     setSlotSettings((prev) => {
       const curr = prev[slotKey] ?? _defaultSlotSettings;
@@ -363,6 +397,7 @@ export function SessionBracketPanel({
   useEffect(() => {
     setGenerationMode("STANDARD");
     setSlotSettings({});
+    setDoublesModeSelections({});
     setTeamLabels({ A: "팀A", B: "팀B" });
     setTeamAssignments({});
     setPendingPairPlayerId(null);
@@ -391,9 +426,9 @@ export function SessionBracketPanel({
     };
   }, []);
 
-  // 슬롯별 대진표 lazy 로드: generationMode/levelMode 전환 시 해당 슬롯이 없으면 fetch
+  // 슬롯별 대진표 lazy 로드: 생성 방식/급수 방식/복식 방식별로 독립 로드
   useEffect(() => {
-    const currentSlotKey = generationMode === "TEAM_BATTLE" ? "TEAM_BATTLE" : `STANDARD_${levelMode}`;
+    const currentSlotKey = slotKey;
 
     // 이미 로드된 슬롯이면 스킵 (ref로 최신값 확인)
     if (loadedSlotsRef.current.has(currentSlotKey)) return;
@@ -415,7 +450,7 @@ export function SessionBracketPanel({
       try {
         const levelModeParam = generationMode === "STANDARD" ? `&levelMode=${levelMode}` : "";
         const response = await fetch(
-          `/api/sessions/bracket?sessionId=${session.id}&generationMode=${generationMode}${levelModeParam}`,
+          `/api/sessions/bracket?sessionId=${session.id}&generationMode=${generationMode}${levelModeParam}&doublesMode=${doublesMode}`,
           { credentials: "include" }
         );
         const data = (await response.json()) as BracketApiResponse & { error?: string };
@@ -427,10 +462,10 @@ export function SessionBracketPanel({
         if (cancelled) return;
 
         // 초기 STANDARD_none 로드 시 TEAM_BATTLE 대진표 자동 감지
-        if (!data.bracket && currentSlotKey === "STANDARD_none") {
+        if (!data.bracket && currentSlotKey === "STANDARD_none_RANDOM") {
           try {
             const tbRes = await fetch(
-              `/api/sessions/bracket?sessionId=${session.id}&generationMode=TEAM_BATTLE`,
+              `/api/sessions/bracket?sessionId=${session.id}&generationMode=TEAM_BATTLE&doublesMode=RANDOM`,
               { credentials: "include" }
             );
             if (tbRes.ok && !cancelled) {
@@ -450,7 +485,7 @@ export function SessionBracketPanel({
 
         if (data.bracket) {
           // 급수필터별 슬롯: filterGroups 복원
-          if (currentSlotKey === "STANDARD_filter" && !tutorialDefaultsActive) {
+          if (currentSlotKey.startsWith("STANDARD_filter_") && !tutorialDefaultsActive) {
             const groups = data.bracket.config.levelGroups ?? [];
             if (groups.length > 0) {
               setFilterGroups(groups.map((g) => ({
@@ -471,12 +506,21 @@ export function SessionBracketPanel({
                 doublesMode:
                   data.bracket!.config.doublesMode ??
                   (data.bracket!.config.separateByGender ? "GENDER_SEPARATED" : "RANDOM"),
-                fixedPairs: data.bracket!.config.fixedPairs ?? [],
+                fixedPairs: (data.bracket!.config.fixedPairs ?? []).map(
+                  ([a, b, targetGames]) => [
+                    a,
+                    b,
+                    Math.min(
+                      data.bracket!.config.minGamesPerPlayer,
+                      Math.max(1, targetGames ?? data.bracket!.config.minGamesPerPlayer)
+                    ),
+                  ]
+                ),
               },
             }));
           }
           // teamLabels / teamAssignments 복원은 STANDARD_none / TEAM_BATTLE 슬롯만
-          const isInitialSlot = currentSlotKey === "STANDARD_none" || currentSlotKey === "TEAM_BATTLE";
+          const isInitialSlot = currentSlotKey === "STANDARD_none_RANDOM" || currentSlotKey === "TEAM_BATTLE_RANDOM";
           if (isInitialSlot && !tutorialDefaultsActive) {
             let resolved = {
               A: data.bracket.config.teamLabels?.A?.trim() || "팀A",
@@ -493,7 +537,7 @@ export function SessionBracketPanel({
             setTeamLabels(resolved);
             setTeamAssignments(data.bracket.config.teamAssignments ?? {});
           }
-        } else if (currentSlotKey === "TEAM_BATTLE" && !tutorialDefaultsActive) {
+        } else if (currentSlotKey.startsWith("TEAM_BATTLE_") && !tutorialDefaultsActive) {
           try {
             const saved = localStorage.getItem(`team_labels_${session.id}`);
             if (saved) {
@@ -530,7 +574,7 @@ export function SessionBracketPanel({
       cancelled = true;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canGenerate, generationMode, levelMode, session.id, tutorialDefaultsActive]);
+  }, [canGenerate, generationMode, levelMode, doublesMode, slotKey, session.id, tutorialDefaultsActive]);
 
   const registeredParticipants = useMemo(
     () => (session.participants ?? []).filter((p) => p.status === "REGISTERED"),
@@ -742,6 +786,7 @@ export function SessionBracketPanel({
         bId: string;
         aName: string;
         bName: string;
+        targetGames: number;
       }>,
       B: [] as Array<{
         index: number;
@@ -749,10 +794,11 @@ export function SessionBracketPanel({
         bId: string;
         aName: string;
         bName: string;
+        targetGames: number;
       }>,
     };
 
-    fixedPairs.forEach(([aId, bId], index) => {
+    fixedPairs.forEach(([aId, bId, targetGames], index) => {
       const aParticipant = registeredParticipants.find(
         (p) => getParticipantPlayerId(p) === aId
       );
@@ -770,6 +816,7 @@ export function SessionBracketPanel({
         bId,
         aName: aParticipant ? getParticipantName(aParticipant) : aId,
         bName: bParticipant ? getParticipantName(bParticipant) : bId,
+        targetGames,
       });
     });
 
@@ -904,13 +951,23 @@ export function SessionBracketPanel({
       const filtered = prev.filter(
         ([a, b]) => a !== first && b !== first && a !== playerId && b !== playerId
       );
-      return [...filtered, [first, playerId]];
+      return [...filtered, [first, playerId, minGamesPerPlayer]];
     });
     setPendingPairPlayerId(null);
   }
 
   function removePair(pairIndex: number) {
     setFixedPairs((prev) => prev.filter((_, i) => i !== pairIndex));
+  }
+
+  function updatePairTargetGames(pairIndex: number, targetGames: number) {
+    setFixedPairs((prev) =>
+      prev.map(([a, b, currentTarget], index) =>
+        index === pairIndex
+          ? [a, b, Math.min(minGamesPerPlayer, Math.max(1, targetGames))]
+          : [a, b, currentTarget]
+      )
+    );
   }
 
   function assignLevelToGroup(level: string, groupId: string) {
@@ -1162,6 +1219,7 @@ export function SessionBracketPanel({
             sessionId: session.id,
             generationMode: newBracket.config.generationMode ?? "STANDARD",
             levelMode: newBracket.config.levelMode ?? "none",
+            doublesMode: newBracket.config.doublesMode ?? "RANDOM",
             rounds: getMutableRounds(newBracket),
             levelGroupId: swapGroupId ?? undefined,
           }),
@@ -1253,6 +1311,7 @@ export function SessionBracketPanel({
           sessionId: session.id,
           generationMode: nextBracket.config.generationMode ?? "STANDARD",
           levelMode: nextBracket.config.levelMode ?? "none",
+          doublesMode: nextBracket.config.doublesMode ?? "RANDOM",
           rounds,
           summary,
           levelGroupId: groupId ?? undefined,
@@ -1392,6 +1451,7 @@ export function SessionBracketPanel({
           sessionId: session.id,
           generationMode: bracket.config.generationMode ?? "STANDARD",
           levelMode: bracket.config.levelMode ?? "none",
+          doublesMode: bracket.config.doublesMode ?? "RANDOM",
           roundNumber,
           courtNumber: actualCourtNumber,
           scoreA,
@@ -2055,8 +2115,8 @@ export function SessionBracketPanel({
                 {pendingPairPlayerId
                   ? "파트너로 묶을 두 번째 참가자를 클릭하세요."
                   : generationMode === "TEAM_BATTLE"
-                    ? "매 라운드 같은 팀으로 묶을 첫 번째 참가자를 클릭하세요. 팀 대항 모드에서는 같은 팀 안에서만 설정할 수 있습니다."
-                    : "매 라운드 같은 팀으로 묶을 첫 번째 참가자를 클릭하세요."}
+                    ? "함께할 두 참가자를 선택하세요. 지정 경기 후에는 다시 같은 팀으로 배정되지 않습니다. 팀 대항 모드에서는 같은 팀 안에서만 설정할 수 있습니다."
+                    : "함께할 두 참가자를 선택하세요. 지정 경기 후에는 다시 같은 팀으로 배정되지 않습니다."}
               </p>
             </div>
             {generationMode === "TEAM_BATTLE" ? (
@@ -2182,7 +2242,7 @@ export function SessionBracketPanel({
                             {fixedPairsByTeam[team.key].map((pair) => (
                               <div
                                 key={pair.index}
-                                className="flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 pl-3 pr-1.5 py-1.5"
+                                className="flex flex-wrap items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2"
                               >
                                 <span className="text-xs font-bold text-violet-700">
                                   {pair.aName}
@@ -2193,6 +2253,21 @@ export function SessionBracketPanel({
                                 <span className="text-xs font-bold text-violet-700">
                                   {pair.bName}
                                 </span>
+                                <label className="ml-auto flex items-center gap-1.5 text-[11px] font-bold text-violet-600">
+                                  총
+                                  <select
+                                    value={pair.targetGames}
+                                    onChange={(event) =>
+                                      updatePairTargetGames(pair.index, Number(event.target.value))
+                                    }
+                                    disabled={loading}
+                                    className="rounded-lg border border-violet-200 bg-white px-2 py-1 text-xs font-bold text-violet-700 outline-none focus:border-violet-400"
+                                  >
+                                    {Array.from({ length: minGamesPerPlayer }, (_, index) => index + 1).map((games) => (
+                                      <option key={games} value={games}>{games}경기</option>
+                                    ))}
+                                  </select>
+                                </label>
                                 <button
                                   type="button"
                                   onClick={() => removePair(pair.index)}
@@ -2214,7 +2289,7 @@ export function SessionBracketPanel({
                   </div>
                 ) : (
                   <div className="flex flex-wrap gap-2">
-                    {fixedPairs.map(([aId, bId], index) => {
+                    {fixedPairs.map(([aId, bId, targetGames], index) => {
                       const aParticipant = registeredParticipants.find(
                         (p) => getParticipantPlayerId(p) === aId
                       );
@@ -2230,7 +2305,7 @@ export function SessionBracketPanel({
                       return (
                         <div
                           key={index}
-                          className="flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 pl-3 pr-1.5 py-1.5"
+                          className="flex flex-wrap items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2"
                         >
                           <span className="text-xs font-bold text-violet-700">
                             {aName}
@@ -2241,6 +2316,19 @@ export function SessionBracketPanel({
                           <span className="text-xs font-bold text-violet-700">
                             {bName}
                           </span>
+                          <label className="ml-auto flex items-center gap-1.5 text-[11px] font-bold text-violet-600">
+                            총
+                            <select
+                              value={targetGames}
+                              onChange={(event) => updatePairTargetGames(index, Number(event.target.value))}
+                              disabled={loading}
+                              className="rounded-lg border border-violet-200 bg-white px-2 py-1 text-xs font-bold text-violet-700 outline-none focus:border-violet-400"
+                            >
+                              {Array.from({ length: minGamesPerPlayer }, (_, optionIndex) => optionIndex + 1).map((games) => (
+                                <option key={games} value={games}>{games}경기</option>
+                              ))}
+                            </select>
+                          </label>
                           <button
                             type="button"
                             onClick={() => removePair(index)}

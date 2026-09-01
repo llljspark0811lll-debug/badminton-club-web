@@ -2,7 +2,7 @@ import { requireAuthAdmin, unauthorizedResponse, notFoundResponse } from "@/lib/
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { ensureSessionBracketTable } from "@/lib/session-bracket-schema";
-import { getVariantKey, normalizeLevelMode, type BracketMode } from "@/lib/bracket-variant-key";
+import { getVariantKey, normalizeBracketDoublesMode, normalizeLevelMode, type BracketMode } from "@/lib/bracket-variant-key";
 
 function normalizeBracketMode(value: string | null | undefined): BracketMode {
   return value === "TEAM_BATTLE" ? "TEAM_BATTLE" : "STANDARD";
@@ -19,6 +19,7 @@ export async function PATCH(req: Request) {
     const sessionId = Number(body.sessionId);
     const generationMode = normalizeBracketMode(body.generationMode);
     const levelMode = normalizeLevelMode(body.levelMode);
+    const doublesMode = normalizeBracketDoublesMode(body.doublesMode);
     const rounds = body.rounds;
     const summary = body.summary;
     const levelGroupId = typeof body.levelGroupId === "string" ? body.levelGroupId : null;
@@ -52,14 +53,24 @@ export async function PATCH(req: Request) {
       levelGroupRounds?: unknown;
     }>;
     const isVariant = Boolean(roundsEnvelope?.variants);
-    const variantKey = getVariantKey(generationMode, levelMode);
+    const variantKey = getVariantKey(generationMode, levelMode, doublesMode);
+    const legacyVariantKey = generationMode === "STANDARD" ? `STANDARD_${levelMode}` : "TEAM_BATTLE";
+    const storageVariantKey = roundsEnvelope.variants?.[variantKey]
+      ? variantKey
+      : roundsEnvelope.variants?.[legacyVariantKey]
+        ? legacyVariantKey
+        : roundsEnvelope.variants?.["STANDARD"]
+          ? "STANDARD"
+          : variantKey;
     const summaryEnvelope = bracketRecord.summary as VariantEnvelope<{
       summary: unknown;
       levelGroupSummaries?: unknown;
     }>;
 
     // 레벨 그룹 모드: 해당 그룹 rounds만 업데이트
-    const variantData = isVariant ? (roundsEnvelope.variants?.[variantKey] ?? roundsEnvelope.variants?.["STANDARD"]) : null;
+    const variantData = isVariant
+      ? (roundsEnvelope.variants?.[variantKey] ?? roundsEnvelope.variants?.[legacyVariantKey] ?? roundsEnvelope.variants?.["STANDARD"])
+      : null;
     const isLevelGroupMode = levelGroupId !== null && variantData && "levelGroupRounds" in variantData;
 
     if (isLevelGroupMode && variantData) {
@@ -68,7 +79,7 @@ export async function PATCH(req: Request) {
       const newRoundsPayload = {
         variants: {
           ...roundsEnvelope.variants,
-          [variantKey]: {
+          [storageVariantKey]: {
             ...variantData,
             levelGroupRounds: {
               ...levelGroupRounds,
@@ -77,7 +88,7 @@ export async function PATCH(req: Request) {
           },
         },
       };
-      const summaryVariant = summaryEnvelope.variants?.[variantKey];
+      const summaryVariant = summaryEnvelope.variants?.[storageVariantKey];
       const levelGroupSummaries = (
         summaryVariant?.levelGroupSummaries ?? {}
       ) as Record<string, unknown>;
@@ -86,7 +97,7 @@ export async function PATCH(req: Request) {
         : {
             variants: {
               ...summaryEnvelope.variants,
-              [variantKey]: {
+              [storageVariantKey]: {
                 ...summaryVariant,
                 levelGroupSummaries: {
                   ...levelGroupSummaries,
@@ -113,7 +124,7 @@ export async function PATCH(req: Request) {
       newRoundsPayload = {
         variants: {
           ...roundsEnvelope.variants,
-          [variantKey]: { rounds },
+          [storageVariantKey]: { rounds },
         },
       };
     } else {
@@ -125,7 +136,7 @@ export async function PATCH(req: Request) {
         ? {
             variants: {
               ...summaryEnvelope.variants,
-              [variantKey]: { summary },
+              [storageVariantKey]: { summary },
             },
           }
         : summary;
