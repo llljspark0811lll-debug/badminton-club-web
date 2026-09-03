@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { isValidPassword, PASSWORD_POLICY_MESSAGE } from "@/lib/password-policy";
 
 export default function AdminResetPasswordTokenPage() {
   const router = useRouter();
@@ -22,8 +23,8 @@ export default function AdminResetPasswordTokenPage() {
       return;
     }
 
-    if (form.password.length < 6) {
-      alert("비밀번호는 6자 이상으로 입력해 주세요.");
+    if (!isValidPassword(form.password)) {
+      alert(PASSWORD_POLICY_MESSAGE);
       return;
     }
 

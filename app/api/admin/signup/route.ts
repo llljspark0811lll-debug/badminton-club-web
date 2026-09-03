@@ -5,6 +5,7 @@ import { createToken, setAuthCookie } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getTrialEndDate } from "@/lib/subscription";
 import { sendTelegramNewClubAlert } from "@/lib/telegram";
+import { isValidPassword, PASSWORD_POLICY_MESSAGE } from "@/lib/password-policy";
 
 const ADMIN_USERNAME_REGEX = /^[a-z0-9]+$/;
 
@@ -45,9 +46,9 @@ export async function POST(req: Request) {
       );
     }
 
-    if (String(password).length < 6) {
+    if (!isValidPassword(String(password))) {
       return NextResponse.json(
-        { error: "비밀번호는 6자 이상으로 입력해 주세요." },
+        { error: PASSWORD_POLICY_MESSAGE },
         { status: 400 }
       );
     }

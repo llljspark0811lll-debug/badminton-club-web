@@ -15,6 +15,7 @@ type PersonalSettingsModalProps = {
   onChangeCurrentPassword: (value: string) => void;
   onClose: () => void;
   onSubmit: () => void;
+  onChangePassword: () => void;
   onDeleteAccount: () => void;
 };
 
@@ -29,6 +30,7 @@ export function PersonalSettingsModal({
   onChangeCurrentPassword,
   onClose,
   onSubmit,
+  onChangePassword,
   onDeleteAccount,
 }: PersonalSettingsModalProps) {
   // 이메일 변경 인증 상태 (모달 내부 관리)
@@ -314,6 +316,13 @@ export function PersonalSettingsModal({
           </div>
 
           <div className="border-t border-dashed border-rose-200 bg-rose-50/60 px-6 py-5">
+            <button
+              type="button"
+              onClick={onChangePassword}
+              className="mb-4 w-full rounded-xl border border-sky-200 bg-sky-50 px-4 py-2.5 text-sm font-bold text-sky-800 shadow-sm transition hover:border-sky-300 hover:bg-sky-100"
+            >
+              비밀번호 변경
+            </button>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-black text-rose-700">계정 탈퇴</p>

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { isValidPassword, PASSWORD_POLICY_MESSAGE } from "@/lib/password-policy";
 
 const ADMIN_USERNAME_REGEX = /^[a-z0-9]+$/;
 const RESEND_COOLDOWN = 60;
@@ -197,8 +198,8 @@ export default function AdminSignupPage() {
       return;
     }
 
-    if (form.password.length < 6) {
-      alert("비밀번호는 6자 이상으로 입력해주세요.");
+    if (!isValidPassword(form.password)) {
+      alert(PASSWORD_POLICY_MESSAGE);
       return;
     }
 

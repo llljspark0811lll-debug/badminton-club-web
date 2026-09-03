@@ -22,6 +22,7 @@ import { CourtBoardModal } from "@/components/dashboard/CourtBoardModal";
 import { PositionSettingsModal } from "@/components/dashboard/PositionSettingsModal";
 import { LevelSettingsModal } from "@/components/dashboard/LevelSettingsModal";
 import { PersonalSettingsModal } from "@/components/dashboard/PersonalSettingsModal";
+import { ChangePasswordModal } from "@/components/dashboard/ChangePasswordModal";
 import { RequestsTable } from "@/components/dashboard/RequestsTable";
 import { SessionsPanel } from "@/components/dashboard/SessionsPanel";
 import { SpecialFeesPanel } from "@/components/dashboard/SpecialFeesPanel";
@@ -167,6 +168,8 @@ export default function DashboardPage() {
   const [savingClubSettings, setSavingClubSettings] =
     useState(false);
   const [showPersonalSettingsModal, setShowPersonalSettingsModal] =
+    useState(false);
+  const [showChangePasswordModal, setShowChangePasswordModal] =
     useState(false);
   const [personalClubNameDraft, setPersonalClubNameDraft] =
     useState("");
@@ -2553,6 +2556,20 @@ export default function DashboardPage() {
         onDeleteAccount={() => {
           setShowPersonalSettingsModal(false);
           setDeleteAccountOpen(true);
+        }}
+        onChangePassword={() => {
+          setShowPersonalSettingsModal(false);
+          setShowChangePasswordModal(true);
+        }}
+      />
+      <ChangePasswordModal
+        open={showChangePasswordModal}
+        onClose={() => setShowChangePasswordModal(false)}
+        onChanged={async () => {
+          setShowChangePasswordModal(false);
+          await fetch("/api/admin/logout", { method: "POST" });
+          router.push("/admin/login");
+          router.refresh();
         }}
       />
       <DeleteAccountModal

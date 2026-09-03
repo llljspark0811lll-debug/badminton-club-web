@@ -2,6 +2,7 @@ import bcrypt from "bcrypt";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { hashRecoveryToken } from "@/lib/account-recovery";
+import { isValidPassword, PASSWORD_POLICY_MESSAGE } from "@/lib/password-policy";
 
 export async function POST(request: Request) {
   try {
@@ -24,9 +25,9 @@ export async function POST(request: Request) {
       );
     }
 
-    if (newPassword.length < 6) {
+    if (!isValidPassword(newPassword)) {
       return NextResponse.json(
-        { error: "비밀번호는 6자 이상으로 입력해 주세요." },
+        { error: PASSWORD_POLICY_MESSAGE },
         { status: 400 }
       );
     }
