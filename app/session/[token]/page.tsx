@@ -543,9 +543,12 @@ export default function PublicSessionPage() {
   }, [registrationStorageKey]);
   const [commentsOpen, setCommentsOpen] = useState(false);
   type PublicCourtPlayer = { participantId: number; name: string };
-  type PublicCourt = { id: number; teamA: PublicCourtPlayer[]; teamB: PublicCourtPlayer[] };
+  type PublicCourt = { id: number; label?: string; teamA: PublicCourtPlayer[]; teamB: PublicCourtPlayer[] };
   type PublicRound = { roundNumber: number; courts: PublicCourt[]; results: Array<{ courtId: number; winner: "A" | "B" | "DRAW" | null }> };
-  type PublicBoardData = { v: 2; courtCount: number; rounds: PublicRound[] } | PublicCourt[];
+  type PublicBoardData =
+    | { v: 2; courtCount: number; rounds: PublicRound[] }
+    | { v: 3; courtCount: number; courts: PublicCourt[] }
+    | PublicCourt[];
 
   const [courtBoard, setCourtBoard] = useState<{
     isPublic: boolean;
@@ -559,6 +562,9 @@ export default function PublicSessionPage() {
     }
     if (raw.v === 2 && raw.rounds.length > 0) {
       return raw.rounds[raw.rounds.length - 1];
+    }
+    if (raw.v === 3 && raw.courts.length > 0) {
+      return { roundNumber: 1, courts: raw.courts, results: [] };
     }
     return null;
   }
@@ -1238,7 +1244,7 @@ export default function PublicSessionPage() {
                   className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50"
                 >
                   <div className="bg-slate-900 px-3 py-1.5 text-center text-xs font-black text-white">
-                    코트 {court.id}
+                    {court.label?.trim() || `코트 ${court.id}`}
                   </div>
                   <div className="p-2.5">
                     <div className="mb-1.5">

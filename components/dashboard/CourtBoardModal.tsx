@@ -15,6 +15,7 @@ type MatchWinner = "A" | "B" | null;
 type CompletedMatch = {
   matchId: number;
   courtId: number;
+  courtLabel: string;
   teamA: CourtPlayer[];
   teamB: CourtPlayer[];
   winner: MatchWinner;
@@ -44,9 +45,15 @@ type CourtBoardModalProps = {
 const MAX_COURTS = 12;
 const MIN_COURTS = 1;
 const MAX_TEAM_SIZE = 2;
+const MAX_COURT_LABEL_LENGTH = 12;
 
 function buildEmptyCourt(id: number): Court {
-  return { id, teamA: [], teamB: [] };
+  return { id, label: `코트 ${id}`, teamA: [], teamB: [] };
+}
+
+function normalizeCourt(court: Omit<Court, "label"> & { label?: unknown }): Court {
+  const label = typeof court.label === "string" ? court.label.trim() : "";
+  return { ...court, label: label || `코트 ${court.id}` };
 }
 
 function getAllAssignedIds(courts: Court[]): Set<number> {
@@ -61,7 +68,8 @@ function getAllAssignedIds(courts: Court[]): Set<number> {
 function makeCourtsFromCount(count: number, existing: Court[]): Court[] {
   return Array.from({ length: count }, (_, i) => {
     const id = i + 1;
-    return existing.find((c) => c.id === id) ?? buildEmptyCourt(id);
+    const court = existing.find((c) => c.id === id);
+    return court ? normalizeCourt(court) : buildEmptyCourt(id);
   });
 }
 
@@ -70,7 +78,7 @@ function parseBoardData(raw: unknown, fallback = 2): BoardData {
     return { v: 3, courtCount: fallback, courts: makeCourtsFromCount(fallback, []), history: [] };
   }
   if (Array.isArray(raw)) {
-    const courts = raw as Court[];
+    const courts = (raw as Court[]).map(normalizeCourt);
     const count = courts.length > 0 ? courts.length : fallback;
     return { v: 3, courtCount: count, courts, history: [] };
   }
@@ -79,21 +87,29 @@ function parseBoardData(raw: unknown, fallback = 2): BoardData {
     type V2Round = { roundNumber: number; courts: Court[]; results: { courtId: number; winner: MatchWinner }[] };
     const rounds = obj.rounds as V2Round[];
     const lastRound = rounds[rounds.length - 1];
-    const courts = lastRound?.courts ?? makeCourtsFromCount(fallback, []);
+    const courts = (lastRound?.courts ?? makeCourtsFromCount(fallback, [])).map(normalizeCourt);
     const history: CompletedMatch[] = [];
     let matchId = 1;
     for (const round of rounds.slice(0, -1)) {
       for (const court of round.courts) {
         if (court.teamA.length > 0 || court.teamB.length > 0) {
           const res = round.results.find((r) => r.courtId === court.id);
-          history.push({ matchId: matchId++, courtId: court.id, teamA: court.teamA, teamB: court.teamB, winner: res?.winner ?? null, completedAt: new Date().toISOString() });
+          history.push({ matchId: matchId++, courtId: court.id, courtLabel: court.label || `코트 ${court.id}`, teamA: court.teamA, teamB: court.teamB, winner: res?.winner ?? null, completedAt: new Date().toISOString() });
         }
       }
     }
     return { v: 3, courtCount: (obj.courtCount as number) || courts.length || fallback, courts, history };
   }
   if (obj.v === 3) {
-    return obj as unknown as BoardData;
+    const data = obj as unknown as BoardData;
+    return {
+      ...data,
+      courts: (data.courts ?? []).map(normalizeCourt),
+      history: (data.history ?? []).map((match) => ({
+        ...match,
+        courtLabel: match.courtLabel?.trim() || `코트 ${match.courtId}`,
+      })),
+    };
   }
   return { v: 3, courtCount: fallback, courts: makeCourtsFromCount(fallback, []), history: [] };
 }
@@ -319,6 +335,9 @@ export function CourtBoardModal({ open, clubName, clubLevels, session, onClose }
   const [loading, setLoading] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [editingCourtId, setEditingCourtId] = useState<number | null>(null);
+  const [courtLabelDraft, setCourtLabelDraft] = useState("");
+  const [courtLabelError, setCourtLabelError] = useState("");
 
   // refs for auto-save
   const boardIdRef = useRef<number | null>(null);
@@ -504,6 +523,7 @@ export function CourtBoardModal({ open, clubName, clubLevels, session, onClose }
     const newMatch: CompletedMatch = {
       matchId: Date.now(),
       courtId: court.id,
+      courtLabel: court.label,
       teamA: court.teamA,
       teamB: court.teamB,
       winner: pendingWinner,
@@ -513,7 +533,7 @@ export function CourtBoardModal({ open, clubName, clubLevels, session, onClose }
     setBoardData((prev) => ({
       ...prev,
       courts: prev.courts.map((c) =>
-        c.id === pendingComplete ? buildEmptyCourt(c.id) : c
+        c.id === pendingComplete ? { ...buildEmptyCourt(c.id), label: c.label } : c
       ),
       history: [newMatch, ...prev.history],
     }));
@@ -533,6 +553,7 @@ export function CourtBoardModal({ open, clubName, clubLevels, session, onClose }
       isDirtyRef.current = false;
       void doAutoSave();
     }
+    cancelEditingCourtLabel();
     onClose();
   }
 
@@ -541,12 +562,45 @@ export function CourtBoardModal({ open, clubName, clubLevels, session, onClose }
     setBoardData((prev) => ({
       v: 3,
       courtCount: prev.courtCount,
-      courts: makeCourtsFromCount(prev.courtCount, []),
+      courts: prev.courts.map((court) => ({ ...court, teamA: [], teamB: [] })),
       history: [],
     }));
     setSelectedParticipantId(null);
     setPendingComplete(null);
     setPendingWinner(null);
+    cancelEditingCourtLabel();
+  }
+
+  function startEditingCourtLabel(court: Court) {
+    setEditingCourtId(court.id);
+    setCourtLabelDraft(court.label);
+    setCourtLabelError("");
+  }
+
+  function cancelEditingCourtLabel() {
+    setEditingCourtId(null);
+    setCourtLabelDraft("");
+    setCourtLabelError("");
+  }
+
+  function saveCourtLabel(courtId: number) {
+    const label = courtLabelDraft.trim();
+    if (!label) {
+      setCourtLabelError("코트 이름을 입력해주세요.");
+      return;
+    }
+    const duplicate = boardData.courts.some(
+      (court) => court.id !== courtId && court.label.trim().toLocaleLowerCase() === label.toLocaleLowerCase()
+    );
+    if (duplicate) {
+      setCourtLabelError("이미 사용 중인 코트 이름입니다.");
+      return;
+    }
+    setBoardData((prev) => ({
+      ...prev,
+      courts: prev.courts.map((court) => court.id === courtId ? { ...court, label } : court),
+    }));
+    cancelEditingCourtLabel();
   }
 
   function handleChangeCourtCount(delta: number) {
@@ -559,6 +613,7 @@ export function CourtBoardModal({ open, clubName, clubLevels, session, onClose }
       if (hasPlayers && !confirm(`코트 ${boardData.courtCount}번을 삭제하면 배정된 선수가 대기실로 이동됩니다. 계속할까요?`)) {
         return;
       }
+      if (editingCourtId !== null && editingCourtId > next) cancelEditingCourtLabel();
     }
 
     setBoardData((prev) => ({
@@ -576,7 +631,7 @@ export function CourtBoardModal({ open, clubName, clubLevels, session, onClose }
       {pendingComplete !== null && pendingCourt && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-sm rounded-[1.5rem] bg-white p-6 shadow-xl">
-            <h3 className="text-lg font-black text-slate-900">경기 완료 — 코트 {pendingCourt.id}</h3>
+            <h3 className="text-lg font-black text-slate-900">경기 완료 — {pendingCourt.label}</h3>
             <p className="mt-1 text-sm text-slate-500">경기 결과를 선택하면 선수들이 대기실로 이동합니다.</p>
 
             <div className="mt-5 space-y-2.5">
@@ -748,7 +803,7 @@ export function CourtBoardModal({ open, clubName, clubLevels, session, onClose }
                 <div className="flex flex-wrap gap-2">
                   {boardData.history.map((match) => (
                     <div key={match.matchId} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
-                      <span className="font-semibold text-slate-400">코트{match.courtId} </span>
+                      <span className="font-semibold text-slate-400">{match.courtLabel} </span>
                       <span className="font-bold text-sky-700">{match.teamA.map((p) => p.name).join("·")}</span>
                       <span className="mx-1.5 text-slate-300">vs</span>
                       <span className="font-bold text-rose-600">{match.teamB.map((p) => p.name).join("·")}</span>
@@ -776,8 +831,55 @@ export function CourtBoardModal({ open, clubName, clubLevels, session, onClose }
                       className="overflow-hidden rounded-2xl border-2 border-slate-200 bg-white shadow-sm"
                     >
                       {/* 코트 헤더 */}
-                      <div className="bg-slate-900 px-4 py-3 text-center">
-                        <span className="text-base font-black text-white">코트 {court.id}</span>
+                      <div className="bg-slate-900 px-4 py-2.5 text-center">
+                        {editingCourtId === court.id ? (
+                          <div>
+                            <div className="flex items-center justify-center gap-1.5">
+                              <input
+                                autoFocus
+                                value={courtLabelDraft}
+                                maxLength={MAX_COURT_LABEL_LENGTH}
+                                onChange={(event) => {
+                                  setCourtLabelDraft(event.target.value);
+                                  setCourtLabelError("");
+                                }}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter") saveCourtLabel(court.id);
+                                  if (event.key === "Escape") cancelEditingCourtLabel();
+                                }}
+                                className="h-8 min-w-0 max-w-40 rounded-lg border border-white/30 bg-white px-2 text-center text-sm font-black text-slate-900 outline-none focus:border-sky-400"
+                                aria-label="코트 이름"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => saveCourtLabel(court.id)}
+                                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-500 text-sm font-black text-white hover:bg-sky-400"
+                                aria-label="코트 이름 저장"
+                              >
+                                ✓
+                              </button>
+                              <button
+                                type="button"
+                                onClick={cancelEditingCourtLabel}
+                                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/10 text-sm font-black text-white hover:bg-white/20"
+                                aria-label="코트 이름 수정 취소"
+                              >
+                                ×
+                              </button>
+                            </div>
+                            {courtLabelError && <p className="mt-1 text-xs font-semibold text-rose-300">{courtLabelError}</p>}
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => startEditingCourtLabel(court)}
+                            className="group inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2 text-base font-black text-white hover:bg-white/10"
+                            title="코트 이름 수정"
+                          >
+                            <span className="max-w-56 truncate">{court.label}</span>
+                            <span className="text-xs text-white/45 transition group-hover:text-white/80" aria-hidden="true">✎</span>
+                          </button>
+                        )}
                       </div>
 
                       {/* 팀A */}

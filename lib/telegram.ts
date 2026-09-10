@@ -179,7 +179,7 @@ export type TelegramAlertInput =
       event: "COURT_BOARD_COURT_ASSIGNED";
       clubName: string;
       sessionTitle: string;
-      courtNumber: number;
+      courtName: string;
       teamA: string[];
       teamB: string[];
     }
@@ -187,7 +187,7 @@ export type TelegramAlertInput =
       event: "COURT_BOARD_MATCH_COMPLETE";
       clubName: string;
       sessionTitle: string;
-      courtNumber: number;
+      courtName: string;
       teamA: string[];
       teamB: string[];
       winner: "A" | "B" | null;
@@ -573,7 +573,7 @@ function buildAlertMessage(input: TelegramAlertInput): string {
         "📋 코트 배정 완료",
         `클럽: ${input.clubName}`,
         `일정: ${input.sessionTitle}`,
-        `코트 ${input.courtNumber}번`,
+        `코트: ${input.courtName}`,
         `A팀: ${input.teamA.join(", ")}`,
         `B팀: ${input.teamB.join(", ")}`,
       ].join("\n");
@@ -586,7 +586,7 @@ function buildAlertMessage(input: TelegramAlertInput): string {
         "🏆 경기 완료",
         `클럽: ${input.clubName}`,
         `일정: ${input.sessionTitle}`,
-        `코트 ${input.courtNumber}번`,
+        `코트: ${input.courtName}`,
         `A팀: ${input.teamA.join(", ")}`,
         `B팀: ${input.teamB.join(", ")}`,
         `결과: ${winnerLabel}`,

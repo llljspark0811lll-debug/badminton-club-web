@@ -8,10 +8,11 @@ import { sendTelegramAlert } from "@/lib/telegram";
 import { NextResponse } from "next/server";
 
 type CourtPlayer = { participantId: number; name: string };
-type Court = { id: number; teamA: CourtPlayer[]; teamB: CourtPlayer[] };
+type Court = { id: number; label?: string; teamA: CourtPlayer[]; teamB: CourtPlayer[] };
 type CompletedMatch = {
   matchId: number;
   courtId: number;
+  courtLabel?: string;
   teamA: CourtPlayer[];
   teamB: CourtPlayer[];
   winner: "A" | "B" | null;
@@ -145,7 +146,7 @@ export async function PUT(req: Request) {
               event: "COURT_BOARD_COURT_ASSIGNED",
               clubName,
               sessionTitle,
-              courtNumber: newCourt.id,
+              courtName: newCourt.label?.trim() || `코트 ${newCourt.id}`,
               teamA: newCourt.teamA.map((p) => p.name),
               teamB: newCourt.teamB.map((p) => p.name),
             });
@@ -160,7 +161,7 @@ export async function PUT(req: Request) {
               event: "COURT_BOARD_MATCH_COMPLETE",
               clubName,
               sessionTitle,
-              courtNumber: match.courtId,
+              courtName: match.courtLabel?.trim() || `코트 ${match.courtId}`,
               teamA: match.teamA.map((p) => p.name),
               teamB: match.teamB.map((p) => p.name),
               winner: match.winner,

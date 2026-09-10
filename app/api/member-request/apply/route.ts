@@ -2,6 +2,7 @@ import { findDuplicateActiveMember, findDuplicatePendingRequest } from "@/lib/me
 import { formatPhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { sendTelegramAlert } from "@/lib/telegram";
+import { getClubLevels } from "@/lib/club-levels";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
@@ -41,6 +42,15 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { error: "가입할 클럽을 찾을 수 없습니다." },
         { status: 404 }
+      );
+    }
+
+    const clubLevels = await getClubLevels(club.id);
+    const selectedLevel = clubLevels.find((clubLevel) => String(clubLevel.rank) === level);
+    if (!selectedLevel) {
+      return NextResponse.json(
+        { error: "클럽에서 사용하는 급수를 선택해주세요." },
+        { status: 400 }
       );
     }
 
@@ -92,7 +102,7 @@ export async function POST(req: Request) {
       clubName: club.name,
       name,
       gender,
-      level,
+      level: selectedLevel.name,
     });
 
     return NextResponse.json({ success: true });

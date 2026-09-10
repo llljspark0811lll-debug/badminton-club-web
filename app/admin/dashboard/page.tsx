@@ -2303,6 +2303,7 @@ export default function DashboardPage() {
             />
             <RequestsTable
             requests={requests}
+            clubLevels={levels}
             customFieldLabel={
               clubInfo?.customFieldLabel ?? "소속클럽"
             }

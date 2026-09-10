@@ -1,4 +1,4 @@
-import type { MemberRequest } from "@/components/dashboard/types";
+import type { ClubLevel, MemberRequest } from "@/components/dashboard/types";
 import {
   formatDate,
   formatPhoneNumber,
@@ -9,6 +9,7 @@ import {
 
 type RequestsTableProps = {
   requests: MemberRequest[];
+  clubLevels: ClubLevel[];
   customFieldLabel: string;
   approvingIds?: number[];
   bulkProcessing?: boolean;
@@ -20,6 +21,7 @@ type RequestsTableProps = {
 
 function RequestCard({
   request,
+  clubLevels,
   customFieldLabel,
   approving,
   bulkProcessing,
@@ -27,6 +29,7 @@ function RequestCard({
   onReject,
 }: {
   request: MemberRequest;
+  clubLevels: ClubLevel[];
   customFieldLabel: string;
   approving: boolean;
   bulkProcessing: boolean;
@@ -34,6 +37,7 @@ function RequestCard({
   onReject: (id: number) => void;
 }) {
   const disabled = approving || bulkProcessing;
+  const levelName = clubLevels.find((level) => String(level.rank) === request.level)?.name ?? request.level;
 
   return (
     <div className="rounded-[1.25rem] border border-slate-200 bg-white p-4 shadow-sm">
@@ -55,7 +59,7 @@ function RequestCard({
                 request.level
               )}`}
             >
-              {request.level}
+              {levelName}
             </span>
           </div>
         </div>
@@ -103,6 +107,7 @@ function RequestCard({
 
 export function RequestsTable({
   requests,
+  clubLevels,
   customFieldLabel,
   approvingIds = [],
   bulkProcessing = false,
@@ -161,6 +166,7 @@ export function RequestsTable({
             {requests.map((request) => {
               const approving = approvingIds.includes(request.id);
               const disabled = approving || bulkProcessing;
+              const levelName = clubLevels.find((level) => String(level.rank) === request.level)?.name ?? request.level;
 
               return (
                 <tr key={request.id} className="hover:bg-slate-50">
@@ -188,7 +194,7 @@ export function RequestsTable({
                         request.level
                       )}`}
                     >
-                      {request.level}
+                      {levelName}
                     </span>
                   </td>
                   <td className="px-4 py-4 text-slate-500">
@@ -244,6 +250,7 @@ export function RequestsTable({
           <RequestCard
             key={request.id}
             request={request}
+            clubLevels={clubLevels}
             customFieldLabel={customFieldLabel}
             approving={approvingIds.includes(request.id)}
             bulkProcessing={bulkProcessing}

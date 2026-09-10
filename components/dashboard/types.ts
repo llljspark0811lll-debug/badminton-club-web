@@ -323,6 +323,7 @@ export interface CourtPlayer {
 
 export interface Court {
   id: number;
+  label: string;
   teamA: CourtPlayer[];
   teamB: CourtPlayer[];
 }
